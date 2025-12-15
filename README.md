@@ -1,1 +1,1 @@
-![Pentara workflow diagram](docs/Workflow.jpg)
+![Pentara workflow diagram](docs/workflow2.jpg)
