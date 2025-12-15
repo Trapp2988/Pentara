@@ -1,20 +1,11 @@
 ## 🧭 Workflow Overview
 
-[🔍 View full-resolution workflow (PDF)](docs/Pentara%20AI%20Spec%20Sheet%20%26%20Code%20Template%20Workflow.pdf)
-
-<p align="center">
-  <a href="docs/Pentara%20AI%20Spec%20Sheet%20%26%20Code%20Template%20Workflow.pdf" target="_blank" rel="noopener noreferrer">
-    <img src="docs/workflow2.jpg"
-         alt="Pentara AI Spec Sheet & Code Template Workflow"
-         style="max-width: 100%; height: auto;">
-  </a>
-</p>
-
-<p align="center">
+<p>
   <a href="docs/Pentara%20AI%20Spec%20Sheet%20%26%20Code%20Template%20Workflow.pdf"
      target="_blank"
      rel="noopener noreferrer">
-    🔍 View full-resolution workflow (PDF)
+    👉 Click here to view the full-resolution workflow (PDF)
   </a>
 </p>
 
+The workflow illustrates an end-to-end client engagement, from requirement gathering and research planning to specification development and code template generation. Human review and verification checkpoints are intentionally embedded to ensure methodological rigor, traceability, and compliance.
