@@ -1,7 +1,9 @@
 ## 🧭 Workflow Overview
 
-[🔍 Click to view full-resolution diagram](docs/workflow2.jpg)
+[🔍 View full-resolution workflow (PDF)](docs/Pentara%20AI%20Spec%20Sheet%20%26%20Code%20Template%20Workflow.pdf)
 
 <p align="center">
-  <img src="docs/workflow2.jpg" alt="Spec Sheet & Code Template Workflow" style="max-width: 100%; height: auto;">
+  <a href="docs/Pentara%20AI%20Spec%20Sheet%20%26%20Code%20Template%20Workflow.pdf">
+    <img src="docs/workflow2.jpg" alt="Pentara AI Spec Sheet & Code Template Workflow" style="max-width: 100%; height: auto;">
+  </a>
 </p>
