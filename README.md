@@ -10,14 +10,6 @@
   </a>
 </p>
 
-<p align="center">
-  <a href="https://raw.githubusercontent.com/<username>/<repo>/main/docs/Pentara%20AI%20Spec%20Sheet%20%26%20Code%20Template%20Workflow.pdf"
-     target="_blank"
-     rel="noopener noreferrer">
-    🔍👉 Click here to view the full-resolution workflow (PDF)
-  </a>
-</p>
-
 ## 🧩 General Outline
 
 1️⃣ **Client selection & meeting capture**  
