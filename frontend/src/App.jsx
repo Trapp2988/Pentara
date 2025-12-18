@@ -1,35 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useMemo, useState } from "react";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+const CLIENTS = ["Client A", "Client B", "Client C"]; // placeholder
+
+export default function App() {
+  const [client, setClient] = useState(CLIENTS[0]);
+  const [status, setStatus] = useState("idle"); // idle | recording | uploading
+
+  const canRecord = useMemo(() => status !== "uploading", [status]);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
+    <div style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
+      <h1>Pentara Meeting Assistant</h1>
+      <p>
+        Select a client, then record a meeting. (Recording & upload wiring comes
+        next.)
       </p>
-    </>
-  )
-}
 
-export default App
+      <label style={{ display: "block", marginTop: 20, marginBottom: 8 }}>
+        Client
+      </label>
+      <select
+        value={client}
+        onChange={(e) => setClient(e.target.value)}
+        style={{ padding: 10, width: "100%", maxWidth: 420 }}
+        disabled={status === "uploading"}
+      >
+        {CLIENTS.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+      </select>
+
+      <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
+        <button
+          disabled={!canRecord || status === "recording"}
+          onClick={() => setStatus("recording")}
+        >
+          Start recording
+        </button>
+
+        <button
+          disabled={status !== "recording"}
+          onClick={() => setStatus("uploading")}
+        >
+          Stop & Upload
+        </button>
+
+        <button
+          disabled={status === "idle"}
+          onClick={() => setStatus("idle")}
+        >
+          Reset
+        </button>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <strong>Status:</strong> {status}
+        <br />
+        <strong>Selected client:</strong> {client}
+      </div>
+    </div>
+  );
+}
