@@ -1,41 +1,31 @@
 import { useMemo, useState } from "react";
 import "./App.css";
-
-const CLIENTS = ["Client A", "Client B", "Client C"]; // placeholder
+import ClientSelector from "./components/ClientSelector";
 
 export default function App() {
-  const [client, setClient] = useState(CLIENTS[0]);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [status, setStatus] = useState("idle"); // idle | recording | uploading
 
-  const canRecord = useMemo(() => status !== "uploading", [status]);
+  // Don’t allow switching clients mid-recording/upload
+  const lockClient = useMemo(
+    () => status === "recording" || status === "uploading",
+    [status]
+  );
 
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
       <h1>Pentara Meeting Assistant</h1>
-      <p>
-        Select a client, then record a meeting. (Recording & upload wiring comes
-        next.)
-      </p>
+      <p>Select a client (from DynamoDB), then record a meeting.</p>
 
-      <label style={{ display: "block", marginTop: 20, marginBottom: 8 }}>
-        Client
-      </label>
-      <select
-        value={client}
-        onChange={(e) => setClient(e.target.value)}
-        style={{ padding: 10, width: "100%", maxWidth: 420 }}
-        disabled={status === "uploading"}
-      >
-        {CLIENTS.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
+      <ClientSelector
+        value={selectedClientId}
+        onChange={setSelectedClientId}
+        disabled={lockClient}
+      />
 
       <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
         <button
-          disabled={!canRecord || status === "recording"}
+          disabled={lockClient || !selectedClientId}
           onClick={() => setStatus("recording")}
         >
           Start recording
@@ -45,7 +35,7 @@ export default function App() {
           disabled={status !== "recording"}
           onClick={() => setStatus("uploading")}
         >
-          Stop & Upload
+          Stop & Upload (next)
         </button>
 
         <button
@@ -59,8 +49,9 @@ export default function App() {
       <div style={{ marginTop: 18 }}>
         <strong>Status:</strong> {status}
         <br />
-        <strong>Selected client:</strong> {client}
+        <strong>Selected client_id:</strong> {selectedClientId || "(none)"}
       </div>
     </div>
   );
 }
+
