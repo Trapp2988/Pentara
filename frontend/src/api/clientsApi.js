@@ -17,19 +17,19 @@ export async function fetchClients() {
   return data.clients || [];
 }
 
-export async function createClient({ display_name, client_id } = {}) {
+export async function createClient({ display_name } = {}) {
+  const name = (display_name || "").trim();
+  if (!name) throw new Error("display_name is required");
+
   const res = await fetch(`${getBaseUrl()}/clients`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      display_name: display_name || undefined,
-      client_id: client_id || undefined,
-    }),
+    body: JSON.stringify({ display_name: name }),
   });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data?.error || `POST /clients failed (${res.status})`);
   }
-  return data.client; // { client_id, display_name, ... }
+  return data.client;
 }
