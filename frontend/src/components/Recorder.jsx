@@ -9,11 +9,12 @@ function pickBestMimeType() {
   return candidates.find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || "";
 }
 
-export default function Recorder() {
-  const [status, setStatus] = useState("idle"); // idle | recording | stopped | error
+export default function Recorder({ selectedClientId }) {
+  const [status, setStatus] = useState("idle"); // idle | prompting | recording | uploading | stopped | error
   const [error, setError] = useState("");
   const [downloadUrl, setDownloadUrl] = useState("");
   const [filename, setFilename] = useState("");
+  const [uploadedKey, setUploadedKey] = useState("");
 
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -21,45 +22,61 @@ export default function Recorder() {
   const micStreamRef = useRef(null);
   const mixedStreamRef = useRef(null);
 
+  async function getUploadUrl(contentType) {
+    const base = import.meta.env.VITE_CLIENTS_API_BASE_URL?.replace(/\/+$/, "");
+    if (!base) throw new Error("Missing VITE_CLIENTS_API_BASE_URL");
+
+    const res = await fetch(`${base}/upload-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: selectedClientId,
+        content_type: contentType || "video/webm",
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `Failed to get upload URL (${res.status})`);
+    return data; // { upload_url, key, content_type, ... }
+  }
+
   async function startRecording() {
     setError("");
+    setUploadedKey("");
     setDownloadUrl("");
     setFilename("");
+
+    if (!selectedClientId) {
+      setError("Select a client first.");
+      return;
+    }
 
     try {
       setStatus("prompting");
 
       // 1) Capture the tab/screen. audio:true is REQUIRED for “Share tab audio” to appear.
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          frameRate: 30,
-        },
+        video: { frameRate: 30 },
         audio: true,
       });
       screenStreamRef.current = screenStream;
 
-      // IMPORTANT: if user did NOT check "Share tab audio", there may be no audio track.
       const tabAudioTracks = screenStream.getAudioTracks();
       const hasTabAudio = tabAudioTracks.length > 0;
 
-      // 2) Capture mic (optional but recommended). If user denies, we still proceed with tab audio.
+      // 2) Capture mic (optional). If denied, we still proceed with tab audio.
       let micStream = null;
       try {
         micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
+          audio: { echoCancellation: true, noiseSuppression: true },
           video: false,
         });
-      } catch (e) {
-        // User denied mic or no mic. That's okay.
+      } catch {
         micStream = null;
       }
       micStreamRef.current = micStream;
 
-      // 3) Mix audio tracks (tab audio + mic) into ONE track.
-      // MediaRecorder can record multiple tracks, but mixing gives the most consistent results.
+      // 3) Mix tab audio + mic into ONE track.
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const destination = audioContext.createMediaStreamDestination();
 
@@ -75,7 +92,6 @@ export default function Recorder() {
         micSource.connect(destination);
       }
 
-      // Build final stream: screen video + mixed audio (if any)
       const videoTrack = screenStream.getVideoTracks()[0];
       const mixedAudioTrack = destination.stream.getAudioTracks()[0]; // may be undefined
 
@@ -92,30 +108,49 @@ export default function Recorder() {
       chunksRef.current = [];
 
       recorder.ondataavailable = (evt) => {
-        if (evt.data && evt.data.size > 0) {
-          chunksRef.current.push(evt.data);
-        }
+        if (evt.data && evt.data.size > 0) chunksRef.current.push(evt.data);
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "video/webm" });
+
+        // Optional: keep local download link for debugging
         const url = URL.createObjectURL(blob);
         setDownloadUrl(url);
 
         const ts = new Date().toISOString().replace(/[:.]/g, "-");
-        const name = `meeting-recording-${ts}.webm`;
-        setFilename(name);
+        const localName = `${selectedClientId}-meeting-${ts}.webm`;
+        setFilename(localName);
 
-        setStatus("stopped");
+        try {
+          setStatus("uploading");
+
+          // 1) get presigned URL
+          const { upload_url, key, content_type } = await getUploadUrl(blob.type || "video/webm");
+
+          // 2) PUT blob to S3
+          const put = await fetch(upload_url, {
+            method: "PUT",
+            headers: { "Content-Type": content_type },
+            body: blob,
+          });
+
+          if (!put.ok) throw new Error(`S3 upload failed (${put.status})`);
+
+          setUploadedKey(key);
+          setStatus("stopped");
+        } catch (e) {
+          setStatus("stopped");
+          setError(e?.message || String(e));
+        }
       };
 
-      recorder.start(1000); // collect data every second
+      recorder.start(1000);
       setStatus("recording");
 
-      // UX guardrail: if we don’t have tab audio, tell them immediately.
       if (!hasTabAudio) {
         setError(
-          "Recording started, but no TAB audio was detected. In the share picker, you must choose the Google Meet TAB and enable 'Share tab audio'. Stop and try again."
+          "Recording started, but TAB audio was not detected. In the share picker, choose the Google Meet TAB and enable 'Share tab audio', then stop and try again."
         );
       }
     } catch (e) {
@@ -137,17 +172,14 @@ export default function Recorder() {
   }
 
   function cleanupStreams() {
-    // Stop screen capture
     if (screenStreamRef.current) {
       screenStreamRef.current.getTracks().forEach((t) => t.stop());
       screenStreamRef.current = null;
     }
-    // Stop mic capture
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
     }
-    // Mixed stream is derived; no need to stop separately beyond its tracks
     mixedStreamRef.current = null;
   }
 
@@ -162,8 +194,9 @@ export default function Recorder() {
   }
 
   const isRecording = status === "recording" || status === "prompting";
-  const canStart = !isRecording;
+  const canStart = !isRecording && status !== "uploading" && !!selectedClientId;
   const canStop = status === "recording";
+  const canDownload = !!downloadUrl;
 
   return (
     <div style={{ maxWidth: 720, padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
@@ -177,6 +210,12 @@ export default function Recorder() {
         <li>Click <b>Share</b></li>
       </ol>
 
+      {!selectedClientId ? (
+        <div style={{ color: "crimson", marginBottom: 10 }}>
+          Select a client first (upload path depends on client_id).
+        </div>
+      ) : null}
+
       <div style={{ display: "flex", gap: 10 }}>
         <button onClick={startRecording} disabled={!canStart} style={{ padding: "8px 12px" }}>
           Start Recording
@@ -184,24 +223,26 @@ export default function Recorder() {
         <button onClick={stopRecording} disabled={!canStop} style={{ padding: "8px 12px" }}>
           Stop
         </button>
-        <button onClick={download} disabled={!downloadUrl} style={{ padding: "8px 12px" }}>
-          Download
+        <button onClick={download} disabled={!canDownload} style={{ padding: "8px 12px" }}>
+          Download (optional)
         </button>
       </div>
 
       <div style={{ marginTop: 12 }}>
         <div><b>Status:</b> {status}</div>
         {error ? <div style={{ color: "crimson", marginTop: 8 }}>{error}</div> : null}
-        {downloadUrl ? (
+
+        {uploadedKey ? (
           <div style={{ marginTop: 8 }}>
-            Ready to download: <code>{filename}</code>
+            <b>Uploaded to S3:</b> <code>{uploadedKey}</code>
           </div>
         ) : null}
-      </div>
 
-      <div style={{ marginTop: 16, fontSize: 13, opacity: 0.85 }}>
-        Note: If you do not select the Meet <b>tab</b> or you do not enable <b>Share tab audio</b>,
-        you will likely only capture your mic (or no audio).
+        {downloadUrl ? (
+          <div style={{ marginTop: 8 }}>
+            Local file: <code>{filename}</code>
+          </div>
+        ) : null}
       </div>
     </div>
   );
