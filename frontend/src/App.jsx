@@ -1,16 +1,10 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import "./App.css";
 import ClientSelector from "./components/ClientSelector";
+import Recorder from "./components/Recorder";
 
 export default function App() {
   const [selectedClientId, setSelectedClientId] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | recording | uploading
-
-  // Don’t allow switching clients mid-recording/upload
-  const lockClient = useMemo(
-    () => status === "recording" || status === "uploading",
-    [status]
-  );
 
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
@@ -20,38 +14,16 @@ export default function App() {
       <ClientSelector
         value={selectedClientId}
         onChange={setSelectedClientId}
-        disabled={lockClient}
+        disabled={false}
       />
 
-      <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
-        <button
-          disabled={lockClient || !selectedClientId}
-          onClick={() => setStatus("recording")}
-        >
-          Start recording
-        </button>
-
-        <button
-          disabled={status !== "recording"}
-          onClick={() => setStatus("uploading")}
-        >
-          Stop & Upload (next)
-        </button>
-
-        <button
-          disabled={status === "idle"}
-          onClick={() => setStatus("idle")}
-        >
-          Reset
-        </button>
+      <div style={{ marginTop: 24 }}>
+        <Recorder selectedClientId={selectedClientId} />
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <strong>Status:</strong> {status}
-        <br />
         <strong>Selected client_id:</strong> {selectedClientId || "(none)"}
       </div>
     </div>
   );
 }
-
