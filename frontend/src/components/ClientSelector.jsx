@@ -165,7 +165,7 @@ export default function ClientSelector({ value, onChange, disabled }) {
               <input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="ACME Pharma"
+                placeholder="Enter Client Name Here"
                 style={{ padding: 10 }}
                 disabled={saving}
               />
