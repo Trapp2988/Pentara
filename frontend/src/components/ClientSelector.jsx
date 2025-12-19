@@ -1,5 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createClient, fetchClients } from "../api/clientsApi";
+
+function slugPreview(name) {
+  return (name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
 
 export default function ClientSelector({ value, onChange, disabled }) {
   const [clients, setClients] = useState([]);
@@ -8,9 +17,10 @@ export default function ClientSelector({ value, onChange, disabled }) {
 
   const [showAdd, setShowAdd] = useState(false);
   const [displayName, setDisplayName] = useState("");
-  const [clientId, setClientId] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+
+  const clientIdPreview = useMemo(() => slugPreview(displayName), [displayName]);
 
   async function refresh({ selectId } = {}) {
     setLoadErr("");
@@ -19,7 +29,9 @@ export default function ClientSelector({ value, onChange, disabled }) {
       const list = await fetchClients();
 
       list.sort((a, b) =>
-        (a.display_name || "").localeCompare(b.display_name || "", undefined, { sensitivity: "base" })
+        (a.display_name || "").localeCompare(b.display_name || "", undefined, {
+          sensitivity: "base",
+        })
       );
 
       setClients(list);
@@ -46,19 +58,23 @@ export default function ClientSelector({ value, onChange, disabled }) {
   function openAdd() {
     setSaveErr("");
     setDisplayName("");
-    setClientId("");
     setShowAdd(true);
   }
 
   async function submitAdd(e) {
     e.preventDefault();
     setSaveErr("");
+
+    const name = displayName.trim();
+    if (!name) {
+      setSaveErr("Display name is required.");
+      return;
+    }
+
     setSaving(true);
     try {
-      const newClient = await createClient({
-        display_name: displayName.trim() || undefined,
-        client_id: clientId.trim() || undefined,
-      });
+      // IMPORTANT: only send display_name; backend slugifies and enforces uniqueness.
+      const newClient = await createClient({ display_name: name });
 
       setShowAdd(false);
       await refresh({ selectId: newClient.client_id });
@@ -73,7 +89,9 @@ export default function ClientSelector({ value, onChange, disabled }) {
 
   return (
     <div style={{ marginTop: 20 }}>
-      <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Client</label>
+      <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
+        Client
+      </label>
 
       <div style={{ display: "flex", gap: 10, width: "100%", maxWidth: 520 }}>
         <select
@@ -97,12 +115,18 @@ export default function ClientSelector({ value, onChange, disabled }) {
           Add Client
         </button>
 
-        <button type="button" onClick={() => refresh()} disabled={disabled || loading}>
+        <button
+          type="button"
+          onClick={() => refresh()}
+          disabled={disabled || loading}
+        >
           Refresh
         </button>
       </div>
 
-      {loadErr ? <div style={{ color: "crimson", marginTop: 10 }}>{loadErr}</div> : null}
+      {loadErr ? (
+        <div style={{ color: "crimson", marginTop: 10 }}>{loadErr}</div>
+      ) : null}
 
       {showAdd ? (
         <div
@@ -115,14 +139,27 @@ export default function ClientSelector({ value, onChange, disabled }) {
             background: "#fff",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <strong>Add Client</strong>
-            <button type="button" onClick={() => setShowAdd(false)} disabled={saving}>
+            <button
+              type="button"
+              onClick={() => setShowAdd(false)}
+              disabled={saving}
+            >
               X
             </button>
           </div>
 
-          <form onSubmit={submitAdd} style={{ display: "grid", gap: 10, marginTop: 10 }}>
+          <form
+            onSubmit={submitAdd}
+            style={{ display: "grid", gap: 10, marginTop: 10 }}
+          >
             <div style={{ display: "grid", gap: 6 }}>
               <label>Display name</label>
               <input
@@ -130,26 +167,28 @@ export default function ClientSelector({ value, onChange, disabled }) {
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="ACME Pharma"
                 style={{ padding: 10 }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <label>Client ID (optional)</label>
-              <input
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder="acme-pharma"
-                style={{ padding: 10 }}
+                disabled={saving}
               />
               <small style={{ opacity: 0.8 }}>
-                Leave blank to auto-generate from Display name.
+                Client ID will be:{" "}
+                <code>{clientIdPreview || "(enter a name)"}</code>
               </small>
             </div>
 
             {saveErr ? <div style={{ color: "crimson" }}>{saveErr}</div> : null}
 
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setShowAdd(false)} disabled={saving}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowAdd(false)}
+                disabled={saving}
+              >
                 Cancel
               </button>
               <button type="submit" disabled={saving}>
