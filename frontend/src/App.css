@@ -1,42 +1,139 @@
+/* App.css - replaces Vite starter styles with a clean layout */
+
+/* Root layout */
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  max-width: 980px;
+  margin: 40px auto;
+  padding: 24px;
+  text-align: left;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Headings */
+h1 {
+  margin: 0 0 6px 0;
+  font-size: 44px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+p {
+  margin: 0 0 18px 0;
+  opacity: 0.9;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+/* White panel cards */
+.panel {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
 }
 
-.card {
-  padding: 2em;
+/* Small section label */
+.sectionTitle {
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  color: rgba(0, 0, 0, 0.82);
 }
 
-.read-the-docs {
-  color: #888;
+/* Control row: select + buttons */
+.controlsRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Inputs + selects */
+select,
+input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: #fff;
+  color: #111;
+  outline: none;
+}
+
+select {
+  min-width: 340px;
+}
+
+select:focus,
+input:focus {
+  border-color: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Buttons */
+button {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: #111;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* Secondary button style */
+.btnSecondary {
+  background: #fff;
+  color: #111;
+}
+
+/* Tabs container */
+.tabsRow {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* Segmented control for tabs */
+.tabs {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 6px;
+  gap: 6px;
+}
+
+.tabBtn {
+  border-radius: 999px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+}
+
+.tabBtnActive {
+  background: #fff;
+  color: #111;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+/* Utility */
+.mt16 {
+  margin-top: 16px;
+}
+.mt20 {
+  margin-top: 20px;
+}
+
+.smallMuted {
+  font-size: 13px;
+  opacity: 0.85;
 }
