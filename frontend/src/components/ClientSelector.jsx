@@ -20,7 +20,10 @@ export default function ClientSelector({ value, onChange, disabled }) {
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
 
-  const clientIdPreview = useMemo(() => slugPreview(displayName), [displayName]);
+  const clientIdPreview = useMemo(
+    () => slugPreview(displayName),
+    [displayName]
+  );
 
   async function refresh({ selectId } = {}) {
     setLoadErr("");
@@ -29,18 +32,18 @@ export default function ClientSelector({ value, onChange, disabled }) {
       const list = await fetchClients();
 
       list.sort((a, b) =>
-        (a.display_name || "").localeCompare(b.display_name || "", undefined, {
-          sensitivity: "base",
-        })
+        (a.display_name || "").localeCompare(
+          b.display_name || "",
+          undefined,
+          { sensitivity: "base" }
+        )
       );
 
       setClients(list);
 
-      // If caller wants to select a specific id (after create), do it.
       if (selectId) {
         onChange?.(selectId);
       } else if (!value && list.length > 0) {
-        // If nothing selected yet, auto-select first item.
         onChange?.(list[0].client_id);
       }
     } catch (e) {
@@ -73,9 +76,7 @@ export default function ClientSelector({ value, onChange, disabled }) {
 
     setSaving(true);
     try {
-      // IMPORTANT: only send display_name; backend slugifies and enforces uniqueness.
       const newClient = await createClient({ display_name: name });
-
       setShowAdd(false);
       await refresh({ selectId: newClient.client_id });
     } catch (e) {
@@ -88,11 +89,7 @@ export default function ClientSelector({ value, onChange, disabled }) {
   const isDisabled = !!disabled || loading;
 
   return (
-    <div style={{ marginTop: 20 }}>
-      <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
-        Client
-      </label>
-
+    <div style={{ marginTop: 6 }}>
       <div style={{ display: "flex", gap: 10, width: "100%", maxWidth: 520 }}>
         <select
           value={value || ""}
