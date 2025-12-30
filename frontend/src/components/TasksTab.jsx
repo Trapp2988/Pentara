@@ -1,5 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { approveTasks, fetchMeetings, generateTasks } from "../api/meetingsApi";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  approveTasks,
+  fetchMeetings,
+  generateTasks,
+  reviseTasks,
+  saveTasks,
+} from "../api/meetingsApi";
 
 function fmtDate(iso) {
   if (!iso) return "";
@@ -31,29 +37,93 @@ function statusPill(text) {
   );
 }
 
+function normalizeTasks(tasks) {
+  if (!Array.isArray(tasks)) return [];
+  return tasks.map((t) => ({
+    title: (t?.title || "").toString(),
+    description: (t?.description || "").toString(),
+  }));
+}
+
+function normalizeQuestions(qs) {
+  if (!Array.isArray(qs)) return [];
+  return qs.map((q) => (q ?? "").toString());
+}
+
+function deepEqualJson(a, b) {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 export default function TasksTab({ selectedClientId }) {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
   const [selectedMeetingId, setSelectedMeetingId] = useState("");
+
+  // Actions
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [revising, setRevising] = useState(false);
+
+  // Editable draft state
+  const [draftTasks, setDraftTasks] = useState([]);
+  const [draftQuestions, setDraftQuestions] = useState([]);
+  const [aiInstructions, setAiInstructions] = useState("");
+
+  // Track the last-loaded server version to detect unsaved edits
+  const baselineRef = useRef({ tasks: [], research_questions: [] });
 
   const selectedMeeting = useMemo(() => {
     return meetings.find((m) => m.meeting_id === selectedMeetingId) || null;
   }, [meetings, selectedMeetingId]);
 
+  const transcriptStatus = (selectedMeeting?.transcript_status || "").toUpperCase();
+  const tasksStatus = (selectedMeeting?.tasks_status || "NONE").toUpperCase();
+
   const canGenerate = useMemo(() => {
-    const t = (selectedMeeting?.transcript_status || "").toUpperCase();
-    return !!selectedClientId && !!selectedMeetingId && t === "READY";
-  }, [selectedClientId, selectedMeetingId, selectedMeeting]);
+    return !!selectedClientId && !!selectedMeetingId && transcriptStatus === "READY";
+  }, [selectedClientId, selectedMeetingId, transcriptStatus]);
+
+  const hasServerOutputs = useMemo(() => {
+    const t = selectedMeeting?.tasks || [];
+    const q = selectedMeeting?.research_questions || [];
+    return (Array.isArray(t) && t.length > 0) || (Array.isArray(q) && q.length > 0);
+  }, [selectedMeeting]);
+
+  const dirty = useMemo(() => {
+    const base = baselineRef.current;
+    return (
+      !deepEqualJson(draftTasks, base.tasks) ||
+      !deepEqualJson(draftQuestions, base.research_questions)
+    );
+  }, [draftTasks, draftQuestions]);
+
+  function loadDraftFromMeeting(meeting) {
+    const serverTasks = normalizeTasks(meeting?.tasks || []);
+    const serverQs = normalizeQuestions(meeting?.research_questions || []);
+    baselineRef.current = {
+      tasks: serverTasks,
+      research_questions: serverQs,
+    };
+    setDraftTasks(serverTasks);
+    setDraftQuestions(serverQs);
+    setAiInstructions(meeting?.last_instructions || "");
+  }
 
   async function refreshMeetings({ preserveSelection = true } = {}) {
     const cid = (selectedClientId || "").trim();
     if (!cid) {
       setMeetings([]);
       setSelectedMeetingId("");
+      setDraftTasks([]);
+      setDraftQuestions([]);
+      baselineRef.current = { tasks: [], research_questions: [] };
       return;
     }
 
@@ -65,19 +135,35 @@ export default function TasksTab({ selectedClientId }) {
 
       if (!preserveSelection) {
         setSelectedMeetingId("");
+        setDraftTasks([]);
+        setDraftQuestions([]);
+        baselineRef.current = { tasks: [], research_questions: [] };
         return;
       }
 
       // Keep selection if it still exists; otherwise pick first meeting if available
-      if (selectedMeetingId && list.some((m) => m.meeting_id === selectedMeetingId)) {
-        return;
+      let nextId = selectedMeetingId;
+      if (!nextId || !list.some((m) => m.meeting_id === nextId)) {
+        nextId = list.length > 0 ? list[0].meeting_id : "";
+        setSelectedMeetingId(nextId);
       }
-      if (list.length > 0) setSelectedMeetingId(list[0].meeting_id);
-      else setSelectedMeetingId("");
+
+      // If a meeting is selected, load its draft from server
+      if (nextId) {
+        const m = list.find((x) => x.meeting_id === nextId) || null;
+        loadDraftFromMeeting(m);
+      } else {
+        setDraftTasks([]);
+        setDraftQuestions([]);
+        baselineRef.current = { tasks: [], research_questions: [] };
+      }
     } catch (e) {
       setErr(e.message || "Failed to load meetings");
       setMeetings([]);
       setSelectedMeetingId("");
+      setDraftTasks([]);
+      setDraftQuestions([]);
+      baselineRef.current = { tasks: [], research_questions: [] };
     } finally {
       setLoading(false);
     }
@@ -89,6 +175,20 @@ export default function TasksTab({ selectedClientId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId]);
 
+  // When selected meeting changes, load draft (with unsaved-change guard)
+  async function onChangeMeeting(nextMeetingId) {
+    if (dirty) {
+      const ok = window.confirm(
+        "You have unsaved edits. Switching meetings will discard them. Continue?"
+      );
+      if (!ok) return;
+    }
+    setSelectedMeetingId(nextMeetingId);
+
+    const m = meetings.find((x) => x.meeting_id === nextMeetingId) || null;
+    loadDraftFromMeeting(m);
+  }
+
   async function onGenerate() {
     if (!canGenerate) return;
 
@@ -96,8 +196,6 @@ export default function TasksTab({ selectedClientId }) {
     setGenerating(true);
     try {
       await generateTasks(selectedClientId, selectedMeetingId);
-
-      // After generation, refresh to pull tasks_status/tasks/questions from DynamoDB.
       await refreshMeetings({ preserveSelection: true });
     } catch (e) {
       setErr(e.message || "Failed to generate tasks");
@@ -121,8 +219,105 @@ export default function TasksTab({ selectedClientId }) {
     }
   }
 
-  const tasksStatus = (selectedMeeting?.tasks_status || "NONE").toUpperCase();
-  const transcriptStatus = (selectedMeeting?.transcript_status || "").toUpperCase();
+  async function onSaveEdits() {
+    if (!selectedClientId || !selectedMeetingId) return;
+
+    setErr("");
+    setSaving(true);
+    try {
+      // Light cleanup: drop completely empty tasks/questions
+      const cleanedTasks = (draftTasks || [])
+        .map((t) => ({
+          title: (t.title || "").trim(),
+          description: (t.description || "").trim(),
+        }))
+        .filter((t) => t.title || t.description);
+
+      const cleanedQs = (draftQuestions || [])
+        .map((q) => (q || "").trim())
+        .filter((q) => q.length > 0);
+
+      await saveTasks(selectedClientId, selectedMeetingId, {
+        tasks: cleanedTasks,
+        research_questions: cleanedQs,
+      });
+
+      await refreshMeetings({ preserveSelection: true });
+    } catch (e) {
+      setErr(e.message || "Failed to save edits");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onReviseWithAI() {
+    if (!selectedClientId || !selectedMeetingId) return;
+
+    const ins = (aiInstructions || "").trim();
+    if (!ins) {
+      setErr("Please enter instructions for the AI (what to change).");
+      return;
+    }
+
+    // If there are unsaved manual edits, force a decision
+    if (dirty) {
+      const ok = window.confirm(
+        "You have unsaved edits. Revise with AI will use the CURRENT saved version in DynamoDB, not your unsaved draft. Save edits first?"
+      );
+      if (ok) {
+        await onSaveEdits();
+      }
+    }
+
+    setErr("");
+    setRevising(true);
+    try {
+      await reviseTasks(selectedClientId, selectedMeetingId, ins);
+      await refreshMeetings({ preserveSelection: true });
+    } catch (e) {
+      setErr(e.message || "Failed to revise with AI");
+    } finally {
+      setRevising(false);
+    }
+  }
+
+  // Draft editing helpers
+  function updateTask(idx, patch) {
+    setDraftTasks((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...patch };
+      return next;
+    });
+  }
+
+  function addTask() {
+    setDraftTasks((prev) => [...prev, { title: "", description: "" }]);
+  }
+
+  function removeTask(idx) {
+    setDraftTasks((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateQuestion(idx, value) {
+    setDraftQuestions((prev) => {
+      const next = [...prev];
+      next[idx] = value;
+      return next;
+    });
+  }
+
+  function addQuestion() {
+    setDraftQuestions((prev) => [...prev, ""]);
+  }
+
+  function removeQuestion(idx) {
+    setDraftQuestions((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function resetDraftToServer() {
+    if (!selectedMeeting) return;
+    loadDraftFromMeeting(selectedMeeting);
+  }
 
   return (
     <div style={{ marginTop: 6 }}>
@@ -134,6 +329,7 @@ export default function TasksTab({ selectedClientId }) {
         </div>
       ) : (
         <>
+          {/* Meeting selector row */}
           <div
             style={{
               display: "flex",
@@ -143,11 +339,11 @@ export default function TasksTab({ selectedClientId }) {
               marginBottom: 12,
             }}
           >
-            <label style={{ fontWeight: 600 }}>Meeting</label>
+            <label style={{ fontWeight: 700 }}>Meeting</label>
 
             <select
               value={selectedMeetingId || ""}
-              onChange={(e) => setSelectedMeetingId(e.target.value)}
+              onChange={(e) => onChangeMeeting(e.target.value)}
               disabled={loading || meetings.length === 0}
               style={{ padding: 10, minWidth: 360, maxWidth: "100%" }}
             >
@@ -167,12 +363,17 @@ export default function TasksTab({ selectedClientId }) {
             <button type="button" onClick={() => refreshMeetings()} disabled={loading}>
               {loading ? "Refreshing..." : "Refresh"}
             </button>
+
+            {dirty ? (
+              <span style={{ fontSize: 13, opacity: 0.85 }}>
+                Unsaved changes
+              </span>
+            ) : null}
           </div>
 
-          {err ? (
-            <div style={{ color: "crimson", marginBottom: 10 }}>{err}</div>
-          ) : null}
+          {err ? <div style={{ color: "crimson", marginBottom: 10 }}>{err}</div> : null}
 
+          {/* Meeting details + actions */}
           {selectedMeeting ? (
             <div
               style={{
@@ -182,7 +383,7 @@ export default function TasksTab({ selectedClientId }) {
                 background: "#fff",
               }}
             >
-              <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "grid", gap: 10 }}>
                 <div>
                   <strong>Meeting ID:</strong> {selectedMeeting.meeting_id}
                 </div>
@@ -202,7 +403,7 @@ export default function TasksTab({ selectedClientId }) {
                         background:
                           tasksStatus === "APPROVED"
                             ? "#e6f4ea"
-                            : tasksStatus === "GENERATED"
+                            : tasksStatus === "GENERATED" || tasksStatus === "REVISED" || tasksStatus === "EDITED"
                             ? "#eef3ff"
                             : "#eee",
                       }}
@@ -216,8 +417,8 @@ export default function TasksTab({ selectedClientId }) {
                 </div>
 
                 {selectedMeeting.transcript_preview ? (
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Transcript preview</div>
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Transcript preview</div>
                     <div
                       style={{
                         padding: 10,
@@ -232,7 +433,8 @@ export default function TasksTab({ selectedClientId }) {
                   </div>
                 ) : null}
 
-                <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                {/* Generate / Approve */}
+                <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
                   <button
                     type="button"
                     onClick={onGenerate}
@@ -254,55 +456,196 @@ export default function TasksTab({ selectedClientId }) {
                   >
                     {approving ? "Approving..." : "Approve"}
                   </button>
+
+                  {dirty ? (
+                    <button type="button" onClick={resetDraftToServer} disabled={saving || revising}>
+                      Reset draft
+                    </button>
+                  ) : null}
                 </div>
 
-                {(selectedMeeting.tasks && selectedMeeting.tasks.length > 0) ||
-                (selectedMeeting.research_questions &&
-                  selectedMeeting.research_questions.length > 0) ? (
-                  <div style={{ marginTop: 14, display: "grid", gap: 14 }}>
-                    {selectedMeeting.tasks && selectedMeeting.tasks.length > 0 ? (
-                      <div>
-                        <h3 style={{ margin: "0 0 8px 0" }}>Tasks</h3>
-                        <ol style={{ margin: 0, paddingLeft: 18 }}>
-                          {selectedMeeting.tasks.map((t, idx) => (
-                            <li key={idx} style={{ marginBottom: 10 }}>
-                              <div style={{ fontWeight: 700 }}>
-                                {t.title || "(untitled task)"}
-                              </div>
-                              {t.description ? (
-                                <div style={{ whiteSpace: "pre-wrap" }}>{t.description}</div>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    ) : null}
-
-                    {selectedMeeting.research_questions &&
-                    selectedMeeting.research_questions.length > 0 ? (
-                      <div>
-                        <h3 style={{ margin: "0 0 8px 0" }}>Research questions</h3>
-                        <ul style={{ margin: 0, paddingLeft: 18 }}>
-                          {selectedMeeting.research_questions.map((q, idx) => (
-                            <li key={idx} style={{ marginBottom: 8 }}>
-                              {q}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div style={{ marginTop: 12, opacity: 0.85 }}>
+                {/* If no outputs yet */}
+                {!hasServerOutputs ? (
+                  <div style={{ marginTop: 10, opacity: 0.85 }}>
                     No tasks/questions stored yet. If transcript is READY, click “Generate”.
                   </div>
+                ) : (
+                  <>
+                    {/* AI revision instructions */}
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontWeight: 800, marginBottom: 6 }}>
+                        AI revision prompt
+                      </div>
+                      <textarea
+                        value={aiInstructions}
+                        onChange={(e) => setAiInstructions(e.target.value)}
+                        placeholder="Example: Make the tasks more specific, add assumptions where needed, and convert research questions into measurable hypotheses."
+                        rows={4}
+                        style={{
+                          width: "100%",
+                          padding: 10,
+                          border: "1px solid #ddd",
+                          borderRadius: 8,
+                          resize: "vertical",
+                        }}
+                        disabled={revising}
+                      />
+                      <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={onReviseWithAI}
+                          disabled={revising || !aiInstructions.trim()}
+                        >
+                          {revising ? "Revising..." : "Revise with AI"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={onSaveEdits}
+                          disabled={saving || !dirty}
+                          title={!dirty ? "No unsaved edits." : ""}
+                        >
+                          {saving ? "Saving..." : "Save edits"}
+                        </button>
+                      </div>
+
+                      <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85 }}>
+                        Tip: You can iterate—Revise with AI, then manually edit, then Save, then revise again.
+                      </div>
+                    </div>
+
+                    {/* Editable Tasks */}
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                        <h3 style={{ margin: 0 }}>Tasks (editable)</h3>
+                        <button type="button" onClick={addTask} disabled={saving || revising}>
+                          + Add task
+                        </button>
+                      </div>
+
+                      {draftTasks.length === 0 ? (
+                        <div style={{ marginTop: 8, opacity: 0.85 }}>
+                          No tasks in draft. Add one, or revise with AI.
+                        </div>
+                      ) : (
+                        <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
+                          {draftTasks.map((t, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                border: "1px solid #eee",
+                                borderRadius: 10,
+                                padding: 12,
+                                background: "#fafafa",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                                <div style={{ fontWeight: 800 }}>Task {idx + 1}</div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeTask(idx)}
+                                  className="btnSecondary"
+                                  disabled={saving || revising}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                                <div style={{ display: "grid", gap: 6 }}>
+                                  <label style={{ fontWeight: 700 }}>Title</label>
+                                  <input
+                                    value={t.title}
+                                    onChange={(e) => updateTask(idx, { title: e.target.value })}
+                                    placeholder="Task title"
+                                    disabled={saving || revising}
+                                  />
+                                </div>
+
+                                <div style={{ display: "grid", gap: 6 }}>
+                                  <label style={{ fontWeight: 700 }}>Description</label>
+                                  <textarea
+                                    value={t.description}
+                                    onChange={(e) =>
+                                      updateTask(idx, { description: e.target.value })
+                                    }
+                                    placeholder="Task description"
+                                    rows={3}
+                                    style={{
+                                      width: "100%",
+                                      padding: 10,
+                                      border: "1px solid #ddd",
+                                      borderRadius: 8,
+                                      resize: "vertical",
+                                    }}
+                                    disabled={saving || revising}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Editable Research Questions */}
+                    <div style={{ marginTop: 18 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                        <h3 style={{ margin: 0 }}>Research Questions (editable)</h3>
+                        <button type="button" onClick={addQuestion} disabled={saving || revising}>
+                          + Add question
+                        </button>
+                      </div>
+
+                      {draftQuestions.length === 0 ? (
+                        <div style={{ marginTop: 8, opacity: 0.85 }}>
+                          No research questions in draft. Add one, or revise with AI.
+                        </div>
+                      ) : (
+                        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                          {draftQuestions.map((q, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                border: "1px solid #eee",
+                                borderRadius: 10,
+                                padding: 12,
+                                background: "#fafafa",
+                                display: "grid",
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                                <div style={{ fontWeight: 800 }}>Question {idx + 1}</div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeQuestion(idx)}
+                                  className="btnSecondary"
+                                  disabled={saving || revising}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              <input
+                                value={q}
+                                onChange={(e) => updateQuestion(idx, e.target.value)}
+                                placeholder="Research question"
+                                disabled={saving || revising}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 {transcriptStatus !== "READY" ? (
-                  <div style={{ marginTop: 12, fontSize: 13, opacity: 0.85 }}>
-                    <strong>Note:</strong> You can only generate tasks when
-                    <code> transcript_status </code>
-                    is <code>READY</code>. Current: <code>{transcriptStatus || "UNKNOWN"}</code>
+                  <div style={{ marginTop: 14, fontSize: 13, opacity: 0.85 }}>
+                    <strong>Note:</strong> You can only generate tasks when{" "}
+                    <code>transcript_status</code> is <code>READY</code>. Current:{" "}
+                    <code>{transcriptStatus || "UNKNOWN"}</code>
                   </div>
                 ) : null}
               </div>
