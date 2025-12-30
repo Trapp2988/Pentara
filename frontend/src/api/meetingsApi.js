@@ -14,16 +14,12 @@ async function readJson(res) {
   return data || {};
 }
 
-function reqUrl(path) {
-  return `${getBaseUrl()}${path}`;
-}
-
 export async function fetchMeetings(clientId) {
   const cid = (clientId || "").trim();
   if (!cid) throw new Error("clientId is required");
 
   const res = await fetch(
-    reqUrl(`/clients/${encodeURIComponent(cid)}/meetings`),
+    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings`,
     { method: "GET" }
   );
 
@@ -43,11 +39,9 @@ export async function generateTasks(clientId, meetingId) {
   if (!mid) throw new Error("meetingId is required");
 
   const res = await fetch(
-    reqUrl(
-      `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
-        mid
-      )}/generate-tasks`
-    ),
+    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
+      mid
+    )}/generate-tasks`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,52 +63,18 @@ export async function generateTasks(clientId, meetingId) {
   return data;
 }
 
-export async function approveTasks(clientId, meetingId) {
-  const cid = (clientId || "").trim();
-  const mid = (meetingId || "").trim();
-  if (!cid) throw new Error("clientId is required");
-  if (!mid) throw new Error("meetingId is required");
-
-  const res = await fetch(
-    reqUrl(
-      `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
-        mid
-      )}/approve-tasks`
-    ),
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    }
-  );
-
-  const data = await readJson(res);
-  if (!res.ok) {
-    throw new Error(data?.error || `POST /approve-tasks failed (${res.status})`);
-  }
-  return data;
-}
-
-/**
- * Revise the CURRENT tasks/questions using user instructions.
- * Backend: POST /clients/{client_id}/meetings/{meeting_id}/revise-tasks
- * Body: { instructions: "..." }
- */
 export async function reviseTasks(clientId, meetingId, instructions) {
   const cid = (clientId || "").trim();
   const mid = (meetingId || "").trim();
   const ins = (instructions || "").trim();
-
   if (!cid) throw new Error("clientId is required");
   if (!mid) throw new Error("meetingId is required");
   if (!ins) throw new Error("instructions is required");
 
   const res = await fetch(
-    reqUrl(
-      `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
-        mid
-      )}/revise-tasks`
-    ),
+    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
+      mid
+    )}/revise-tasks`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -136,38 +96,52 @@ export async function reviseTasks(clientId, meetingId, instructions) {
   return data;
 }
 
-/**
- * Save manual edits for tasks/questions.
- * Backend: PUT /clients/{client_id}/meetings/{meeting_id}/tasks
- * Body: { tasks: [...], research_questions: [...] }
- */
-export async function saveTasks(clientId, meetingId, { tasks, research_questions }) {
+export async function saveTasks(clientId, meetingId, payload) {
   const cid = (clientId || "").trim();
   const mid = (meetingId || "").trim();
-
   if (!cid) throw new Error("clientId is required");
   if (!mid) throw new Error("meetingId is required");
-  if (!Array.isArray(tasks)) throw new Error("tasks must be an array");
-  if (!Array.isArray(research_questions)) throw new Error("research_questions must be an array");
 
   const res = await fetch(
-    reqUrl(
-      `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/tasks`
-    ),
+    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
+      mid
+    )}/tasks`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tasks, research_questions }),
+      body: JSON.stringify(payload || {}),
     }
   );
 
   const data = await readJson(res);
   if (!res.ok) {
     throw new Error(
-      data?.error ||
-        `PUT /clients/${cid}/meetings/${mid}/tasks failed (${res.status})`
+      data?.error || `PUT /clients/${cid}/meetings/${mid}/tasks failed (${res.status})`
     );
   }
+  return data;
+}
 
+export async function approveTasks(clientId, meetingId) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+
+  const res = await fetch(
+    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
+      mid
+    )}/approve-tasks`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }
+  );
+
+  const data = await readJson(res);
+  if (!res.ok) {
+    throw new Error(data?.error || `POST /approve-tasks failed (${res.status})`);
+  }
   return data;
 }
