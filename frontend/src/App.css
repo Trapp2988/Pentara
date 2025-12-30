@@ -103,27 +103,31 @@ button:disabled {
 /* Segmented control for tabs */
 .tabs {
   display: inline-flex;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #f3f4f6; /* solid light background */
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 999px;
   padding: 6px;
   gap: 6px;
 }
 
+/* Inactive tab */
 .tabBtn {
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 10px 16px;
   border: 1px solid transparent;
   background: transparent;
-  color: rgba(255, 255, 255, 0.85);
+  color: #444;
   font-weight: 700;
+  cursor: pointer;
 }
 
+/* Active tab */
 .tabBtnActive {
-  background: #fff;
-  color: #111;
-  border-color: rgba(0, 0, 0, 0.12);
+  background: #111;
+  color: #fff;
+  border-color: #111;
 }
+
 
 /* Utility */
 .mt16 {
