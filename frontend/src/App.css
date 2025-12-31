@@ -8,11 +8,23 @@
   --bg-dark: #0f172a;
   --bg-light: #f8fafc;
 
-  --text-dark: #0f172a;
-  --text-muted: rgba(15, 23, 42, 0.65);
-  --border-light: rgba(15, 23, 42, 0.12);
+  /* Darker/stronger text for readability */
+  --text-dark: #0b1220;
+  --text-muted: rgba(11, 18, 32, 0.78);
+
+  --border-light: rgba(15, 23, 42, 0.14);
+
+  /* Subtle section backgrounds */
+  --subtle-bg: #eef3f9;
+  --subtle-bg-2: #f4f7fb;
 }
 
+/* Ensure the whole page has readable default text */
+body {
+  background: linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
+  color: #f5f7fa;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
 
 /* Root layout */
 #root {
@@ -33,7 +45,7 @@ h1 {
 
 p {
   margin: 0 0 18px 0;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 /* White panel cards */
@@ -43,14 +55,26 @@ p {
   border-radius: 14px;
   padding: 16px;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  color: var(--text-dark);
+}
+
+/* Make ALL text inside panels darker (fixes faint text on laptop) */
+.panel,
+.panel * {
+  color: var(--text-dark);
 }
 
 /* Small section label */
 .sectionTitle {
-  font-weight: 700;
+  font-weight: 800;
   margin: 0 0 10px 0;
-  color: var(--pentara-blue);
+  color: #0b3a5c; /* darker Pentara blue for contrast */
   letter-spacing: 0.01em;
+}
+
+/* Add subtle separation between sections inside panels */
+.panel > * + * {
+  margin-top: 12px;
 }
 
 /* Control row: select + buttons */
@@ -59,38 +83,6 @@ p {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-}
-
-/* Inputs + selects */
-select,
-input {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  background: #fff;
-  color: #111;
-  outline: none;
-}
-
-select {
-  min-width: 340px;
-}
-
-select:focus,
-input:focus {
-  border-color: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
-}
-
-/* Ensure the whole page has readable default text */
-body {
-  background: linear-gradient(
-    180deg,
-    #0b1220 0%,
-    #0f172a 100%
-  );
-  color: #f5f7fa;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* Inputs + selects + textareas */
@@ -110,6 +102,14 @@ textarea {
 textarea {
   width: 100%;
   resize: vertical;
+  min-height: 92px;
+  background: #fbfdff; /* slight tint so it reads as its own section */
+}
+
+/* Placeholder visibility */
+input::placeholder,
+textarea::placeholder {
+  color: rgba(11, 18, 32, 0.52);
 }
 
 /* Focus */
@@ -117,13 +117,26 @@ select:focus,
 input:focus,
 textarea:focus {
   border-color: var(--pentara-blue);
-  box-shadow: 0 0 0 3px rgba(30, 136, 200, 0.15);
+  box-shadow: 0 0 0 3px rgba(30, 136, 200, 0.18);
 }
 
-/* Placeholder visibility */
-input::placeholder,
-textarea::placeholder {
-  color: rgba(15, 23, 42, 0.45);
+select {
+  min-width: 340px;
+}
+
+/* Buttons */
+button {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--pentara-blue);
+  background: var(--pentara-blue);
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.06);
 }
 
 /* Disabled controls: keep text readable */
@@ -136,37 +149,15 @@ button:disabled {
 input:disabled,
 textarea:disabled,
 select:disabled {
-  opacity: 0.75;
-  color: rgba(0, 0, 0, 0.75);
-  background: #efefef;
-}
-
-
-/* Buttons */
-button {
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--pentara-blue);
-  background: var(--pentara-blue);
-  color: #ffffff;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-button:hover {
-  filter: brightness(1.06);
-}
-
-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  filter: none;
+  opacity: 0.85;
+  color: rgba(11, 18, 32, 0.75);
+  background: #eef2f6;
 }
 
 /* Secondary button */
 .btnSecondary {
   background: #ffffff;
-  color: var(--pentara-blue);
+  color: #0b3a5c;
   border-color: var(--pentara-blue);
 }
 
@@ -180,8 +171,8 @@ button:disabled {
 /* Segmented control for tabs */
 .tabs {
   display: inline-flex;
-  background: #f3f4f6; /* solid light background */
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #eaf3fb; /* Pentara-tinted */
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   padding: 6px;
   gap: 6px;
@@ -193,18 +184,40 @@ button:disabled {
   padding: 10px 16px;
   border: 1px solid transparent;
   background: transparent;
-  color: #444;
-  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9); /* visible on dark background */
+  font-weight: 800;
   cursor: pointer;
 }
 
 /* Active tab */
 .tabBtnActive {
-  background: #111;
+  background: var(--pentara-blue);
   color: #fff;
-  border-color: #111;
+  border-color: var(--pentara-blue);
 }
 
+/* ----------------------------------------------------
+   OPTIONAL "SECTIONING" HELPERS (use if your JSX has these classes)
+   If you don't have these classes, no harm—they won't apply.
+---------------------------------------------------- */
+
+/* Slightly darker blocks inside the white panel */
+.subPanel {
+  background: var(--subtle-bg-2);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+/* Task cards (clear separation) */
+.taskCard {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-left: 6px solid var(--pentara-blue);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
 
 /* Utility */
 .mt16 {
