@@ -1,5 +1,19 @@
 /* App.css - replaces Vite starter styles with a clean layout */
 
+:root {
+  --pentara-blue: #1e88c8;
+  --pentara-green: #7bc043;
+  --pentara-orange: #f5a623;
+
+  --bg-dark: #0f172a;
+  --bg-light: #f8fafc;
+
+  --text-dark: #0f172a;
+  --text-muted: rgba(15, 23, 42, 0.65);
+  --border-light: rgba(15, 23, 42, 0.12);
+}
+
+
 /* Root layout */
 #root {
   max-width: 980px;
@@ -14,6 +28,7 @@ h1 {
   font-size: 44px;
   line-height: 1.05;
   letter-spacing: -0.02em;
+  color: #ffffff;
 }
 
 p {
@@ -24,17 +39,18 @@ p {
 /* White panel cards */
 .panel {
   background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-light);
   border-radius: 14px;
   padding: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
 }
 
 /* Small section label */
 .sectionTitle {
   font-weight: 700;
   margin: 0 0 10px 0;
-  color: rgba(0, 0, 0, 0.82);
+  color: var(--pentara-blue);
+  letter-spacing: 0.01em;
 }
 
 /* Control row: select + buttons */
@@ -66,19 +82,79 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
 }
 
+/* Ensure the whole page has readable default text */
+body {
+  background: linear-gradient(
+    180deg,
+    #0b1220 0%,
+    #0f172a 100%
+  );
+  color: #f5f7fa;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Inputs + selects + textareas */
+select,
+input,
+textarea {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  background: #ffffff;
+  color: var(--text-dark);
+  outline: none;
+  line-height: 1.35;
+}
+
+/* Make textareas behave nicely */
+textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Focus */
+select:focus,
+input:focus,
+textarea:focus {
+  border-color: var(--pentara-blue);
+  box-shadow: 0 0 0 3px rgba(30, 136, 200, 0.15);
+}
+
+/* Placeholder visibility */
+input::placeholder,
+textarea::placeholder {
+  color: rgba(15, 23, 42, 0.45);
+}
+
+/* Disabled controls: keep text readable */
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.75;
+  color: rgba(0, 0, 0, 0.75);
+  background: #efefef;
+}
+
+
 /* Buttons */
 button {
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  background: #111;
-  color: #fff;
+  border: 1px solid var(--pentara-blue);
+  background: var(--pentara-blue);
+  color: #ffffff;
   font-weight: 650;
   cursor: pointer;
 }
 
 button:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.06);
 }
 
 button:disabled {
@@ -87,10 +163,11 @@ button:disabled {
   filter: none;
 }
 
-/* Secondary button style */
+/* Secondary button */
 .btnSecondary {
-  background: #fff;
-  color: #111;
+  background: #ffffff;
+  color: var(--pentara-blue);
+  border-color: var(--pentara-blue);
 }
 
 /* Tabs container */
@@ -139,5 +216,5 @@ button:disabled {
 
 .smallMuted {
   font-size: 13px;
-  opacity: 0.85;
+  color: var(--text-muted);
 }
