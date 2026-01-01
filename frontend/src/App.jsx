@@ -3,17 +3,18 @@ import "./App.css";
 import ClientSelector from "./components/ClientSelector";
 import Recorder from "./components/Recorder";
 import TasksTab from "./components/TasksTab";
+import SpecSheetsTab from "./components/SpecSheetsTab";
+import CodeTemplatesTab from "./components/CodeTemplatesTab";
 
 export default function App() {
   const [selectedClientId, setSelectedClientId] = useState("");
-  const [activeTab, setActiveTab] = useState("record"); // "record" | "tasks"
+  const [activeTab, setActiveTab] = useState("record"); // record | tasks | specs | templates
 
   return (
     <div>
       <h1>Pentara Meeting Assistant</h1>
       <p>Select a client (from DynamoDB), then record a meeting or generate tasks.</p>
 
-      {/* TOP-LEVEL TABS */}
       <div className="tabsRow">
         <div className="tabs">
           <button
@@ -31,10 +32,25 @@ export default function App() {
           >
             Tasks / Research Questions
           </button>
+
+          <button
+            type="button"
+            className={`tabBtn ${activeTab === "specs" ? "tabBtnActive" : ""}`}
+            onClick={() => setActiveTab("specs")}
+          >
+            Spec Sheets
+          </button>
+
+          <button
+            type="button"
+            className={`tabBtn ${activeTab === "templates" ? "tabBtnActive" : ""}`}
+            onClick={() => setActiveTab("templates")}
+          >
+            Code Templates
+          </button>
         </div>
       </div>
 
-      {/* CLIENT CONTEXT PANEL */}
       <div className="panel mt20">
         <div className="sectionTitle">Client</div>
 
@@ -49,12 +65,15 @@ export default function App() {
         </div>
       </div>
 
-      {/* MAIN CONTENT PANEL */}
       <div className="panel mt20">
         {activeTab === "record" ? (
           <Recorder selectedClientId={selectedClientId} />
-        ) : (
+        ) : activeTab === "tasks" ? (
           <TasksTab selectedClientId={selectedClientId} />
+        ) : activeTab === "specs" ? (
+          <SpecSheetsTab selectedClientId={selectedClientId} />
+        ) : (
+          <CodeTemplatesTab selectedClientId={selectedClientId} />
         )}
       </div>
     </div>
