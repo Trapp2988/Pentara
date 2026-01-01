@@ -1,65 +1,69 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { fetchMeetings } from "../api/meetingsApi";
+import { fetchDeliverables } from "../api/deliverablesApi";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-
-async function apiFetch(path, options = {}) {
-  if (!API_BASE) throw new Error("Missing VITE_API_BASE_URL");
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
-
-  const text = await res.text();
-  let data = null;
+function fmtDate(iso) {
+  if (!iso) return "";
   try {
-    data = text ? JSON.parse(text) : null;
+    return new Date(iso).toLocaleString();
   } catch {
-    // ignore
+    return iso;
   }
-
-  if (!res.ok) {
-    const msg = data?.error || data?.message || `Request failed (${res.status})`;
-    throw new Error(msg);
-  }
-  return data;
 }
 
 export default function CodeTemplatesTab({ selectedClientId }) {
   const [meetings, setMeetings] = useState([]);
-  const [meetingId, setMeetingId] = useState("");
+  const [selectedMeetingId, setSelectedMeetingId] = useState("");
+
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  const selectedMeeting = useMemo(
-    () => meetings.find((m) => m.meeting_id === meetingId) || null,
-    [meetings, meetingId]
-  );
+  const selectedMeeting = useMemo(() => {
+    return meetings.find((m) => m.meeting_id === selectedMeetingId) || null;
+  }, [meetings, selectedMeetingId]);
 
-  async function loadMeetings(autoselect = true) {
-    if (!selectedClientId) {
+  const templates = selectedMeeting?.code_templates || [];
+
+  async function refreshMeetings({ preserveSelection = true } = {}) {
+    const cid = (selectedClientId || "").trim();
+    if (!cid) {
       setMeetings([]);
-      setMeetingId("");
+      setSelectedMeetingId("");
       return;
     }
+
     setErr("");
-    const data = await apiFetch(`/clients/${encodeURIComponent(selectedClientId)}/meetings`);
-    const list = data?.meetings || [];
-    setMeetings(list);
-    if (autoselect && !meetingId && list.length) setMeetingId(list[0].meeting_id);
+    setLoading(true);
+    try {
+      const list = await fetchMeetings(cid);
+      setMeetings(list);
+
+      if (!preserveSelection) {
+        setSelectedMeetingId(list?.[0]?.meeting_id || "");
+        return;
+      }
+
+      let nextId = selectedMeetingId;
+      if (!nextId || !list.some((m) => m.meeting_id === nextId)) {
+        nextId = list.length > 0 ? list[0].meeting_id : "";
+        setSelectedMeetingId(nextId);
+      }
+    } catch (e) {
+      setErr(e.message || "Failed to load meetings");
+      setMeetings([]);
+      setSelectedMeetingId("");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function loadDeliverables() {
+  async function hydrateDeliverables(meetingId) {
     if (!selectedClientId || !meetingId) return;
     setBusy(true);
     setErr("");
     try {
-      const d = await apiFetch(
-        `/clients/${encodeURIComponent(selectedClientId)}/meetings/${encodeURIComponent(meetingId)}/deliverables`
-      );
-
+      const d = await fetchDeliverables(selectedClientId, meetingId);
       setMeetings((prev) =>
         prev.map((m) =>
           m.meeting_id === meetingId
@@ -82,103 +86,133 @@ export default function CodeTemplatesTab({ selectedClientId }) {
   }
 
   useEffect(() => {
-    loadMeetings(true).catch((e) => setErr(e.message || "Failed to load meetings"));
+    refreshMeetings({ preserveSelection: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId]);
 
   useEffect(() => {
-    if (!meetingId) return;
-    loadDeliverables().catch(() => {});
+    if (selectedMeetingId) hydrateDeliverables(selectedMeetingId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingId]);
+  }, [selectedMeetingId]);
 
-  if (!selectedClientId) {
-    return <div className="smallMuted">Select a client to use Code Templates.</div>;
+  async function onChangeMeeting(nextId) {
+    setSelectedMeetingId(nextId);
+    await hydrateDeliverables(nextId);
   }
 
-  const templates = selectedMeeting?.code_templates || [];
-  const deliverablesStatus = selectedMeeting?.deliverables_status || "none";
-  const lang = selectedMeeting?.deliverables_language || "";
-
   return (
-    <div>
-      <div className="sectionTitle">Code Templates</div>
+    <div style={{ marginTop: 6 }}>
+      <h2 style={{ margin: "10px 0" }}>Code Templates</h2>
 
-      <div className="controlsRow mt16">
-        <div className="smallMuted" style={{ fontWeight: 700 }}>
-          Meeting
-        </div>
-
-        <select value={meetingId} onChange={(e) => setMeetingId(e.target.value)} disabled={busy}>
-          <option value="">(select)</option>
-          {meetings.map((m) => (
-            <option key={m.meeting_id} value={m.meeting_id}>
-              {m.meeting_id} — {m.transcript_status || "?"}
-            </option>
-          ))}
-        </select>
-
-        <button type="button" onClick={() => loadMeetings(false)} disabled={busy}>
-          Refresh
-        </button>
-
-        <button type="button" className="btnSecondary" onClick={loadDeliverables} disabled={busy || !meetingId}>
-          Load templates
-        </button>
-      </div>
-
-      {meetingId && (
-        <div className="mt16 smallMuted">
-          <div>
-            <strong>Deliverables:</strong> {deliverablesStatus}{" "}
-            {selectedMeeting?.deliverables_revision ? `(rev ${selectedMeeting.deliverables_revision})` : ""}
-          </div>
-          <div>
-            <strong>Language:</strong> {lang || "(not set)"}
-          </div>
-        </div>
-      )}
-
-      {err && (
-        <div className="mt16" style={{ color: "#b91c1c", fontWeight: 700 }}>
-          {err}
-        </div>
-      )}
-
-      <div className="mt20 sectionTitle">Generated templates (S3 keys)</div>
-
-      {!meetingId ? (
-        <div className="smallMuted">Select a meeting.</div>
-      ) : !templates.length ? (
-        <div className="smallMuted">
-          No templates yet. Generate deliverables in the Spec Sheets tab first.
+      {!selectedClientId ? (
+        <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+          Select a client to view meetings.
         </div>
       ) : (
-        <div style={{ display: "grid", gap: 10 }}>
-          {templates.map((t) => (
+        <>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: 12,
+            }}
+          >
+            <label style={{ fontWeight: 700 }}>Meeting</label>
+
+            <select
+              value={selectedMeetingId || ""}
+              onChange={(e) => onChangeMeeting(e.target.value)}
+              disabled={loading || meetings.length === 0 || busy}
+              style={{ padding: 10, minWidth: 360, maxWidth: "100%" }}
+            >
+              {meetings.length === 0 ? (
+                <option value="" disabled>
+                  {loading ? "Loading meetings..." : "No meetings found"}
+                </option>
+              ) : null}
+
+              {meetings.map((m) => (
+                <option key={m.meeting_id} value={m.meeting_id}>
+                  {m.meeting_id} — deliverables {String(m.deliverables_status || "NONE")}
+                </option>
+              ))}
+            </select>
+
+            <button type="button" onClick={() => refreshMeetings()} disabled={loading || busy}>
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+
+            <button type="button" className="btnSecondary" onClick={() => hydrateDeliverables(selectedMeetingId)} disabled={!selectedMeetingId || busy}>
+              {busy ? "Loading..." : "Load templates"}
+            </button>
+          </div>
+
+          {err ? <div style={{ color: "crimson", marginBottom: 10 }}>{err}</div> : null}
+
+          {selectedMeeting ? (
             <div
-              key={`${t.task_index}-${t.language}-${t.s3_key}`}
               style={{
-                border: "1px solid rgba(15, 23, 42, 0.12)",
-                borderRadius: 12,
-                padding: 12,
-                background: "#f8fafc",
+                border: "1px solid #ddd",
+                borderRadius: 10,
+                padding: 14,
+                background: "#fff",
               }}
             >
-              <div style={{ fontWeight: 800, color: "#0f172a" }}>
-                Task {String(t.task_index).padStart(2, "0")} — {t.language}
-              </div>
-              <div className="smallMuted" style={{ marginTop: 6 }}>
-                <strong>S3:</strong> {t.s3_key}
+              <div style={{ display: "grid", gap: 10 }}>
+                <div>
+                  <strong>Meeting ID:</strong> {selectedMeeting.meeting_id}
+                </div>
+
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ opacity: 0.85 }}>
+                    <strong>Language:</strong> {selectedMeeting.deliverables_language || "(not set)"}
+                  </div>
+                  <div style={{ opacity: 0.85 }}>
+                    <strong>Updated:</strong> {fmtDate(selectedMeeting.updated_at)}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 10 }}>
+                  <h3 style={{ margin: 0 }}>Generated Templates (S3 keys)</h3>
+
+                  {templates.length === 0 ? (
+                    <div style={{ marginTop: 8, opacity: 0.85 }}>
+                      No templates yet. Generate deliverables in the Spec Sheets tab first.
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
+                      {templates.map((t) => (
+                        <div
+                          key={`${t.task_index}-${t.language}-${t.s3_key}`}
+                          style={{
+                            border: "1px solid #eee",
+                            borderRadius: 10,
+                            padding: 12,
+                            background: "#fafafa",
+                          }}
+                        >
+                          <div style={{ fontWeight: 800 }}>
+                            Task {String(t.task_index).padStart(2, "0")} — {t.language}
+                          </div>
+                          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 6 }}>
+                            <strong>S3 key:</strong> {t.s3_key}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          ))}
-        </div>
+          ) : (
+            <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+              {loading ? "Loading..." : "No meeting selected."}
+            </div>
+          )}
+        </>
       )}
-
-      <div className="mt20 smallMuted">
-        Same note: to preview/download in the browser, add a backend presigned GET endpoint.
-      </div>
     </div>
   );
 }
