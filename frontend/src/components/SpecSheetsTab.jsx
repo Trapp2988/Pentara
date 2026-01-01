@@ -1,102 +1,112 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { fetchMeetings } from "../api/meetingsApi";
+import {
+  approveDeliverables,
+  fetchDeliverables,
+  generateDeliverables,
+  reviseDeliverables,
+} from "../api/deliverablesApi";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-
-async function apiFetch(path, options = {}) {
-  if (!API_BASE) throw new Error("Missing VITE_API_BASE_URL");
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
-
-  const text = await res.text();
-  let data = null;
+function fmtDate(iso) {
+  if (!iso) return "";
   try {
-    data = text ? JSON.parse(text) : null;
+    return new Date(iso).toLocaleString();
   } catch {
-    // ignore
+    return iso;
   }
+}
 
-  if (!res.ok) {
-    const msg = data?.error || data?.message || `Request failed (${res.status})`;
-    throw new Error(msg);
-  }
-  return data;
+function pill(text, kind = "neutral") {
+  const bg =
+    kind === "good"
+      ? "#e6f4ea"
+      : kind === "warn"
+      ? "#fff4e5"
+      : kind === "info"
+      ? "#eef3ff"
+      : kind === "bad"
+      ? "#fde7e9"
+      : "#eee";
+
+  return (
+    <span
+      style={{
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 12,
+        border: "1px solid #ddd",
+        background: bg,
+      }}
+    >
+      {(text || "").toUpperCase() || "UNKNOWN"}
+    </span>
+  );
 }
 
 export default function SpecSheetsTab({ selectedClientId }) {
   const [meetings, setMeetings] = useState([]);
-  const [meetingId, setMeetingId] = useState("");
+  const [selectedMeetingId, setSelectedMeetingId] = useState("");
 
-  const [language, setLanguage] = useState("R"); // R | SAS | BOTH
-  const [revisePrompt, setRevisePrompt] = useState("");
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  const selectedMeeting = useMemo(
-    () => meetings.find((m) => m.meeting_id === meetingId) || null,
-    [meetings, meetingId]
-  );
+  const [language, setLanguage] = useState("R"); // R | SAS | BOTH
+  const [aiInstructions, setAiInstructions] = useState("");
 
-  const canUse = !!selectedClientId;
-  const tasksApproved =
-    (selectedMeeting?.tasks_status || "").toLowerCase() === "approved";
+  const selectedMeeting = useMemo(() => {
+    return meetings.find((m) => m.meeting_id === selectedMeetingId) || null;
+  }, [meetings, selectedMeetingId]);
 
-  async function loadMeetings(autoselect = true) {
-    if (!selectedClientId) {
+  const tasksStatus = (selectedMeeting?.tasks_status || "NONE").toUpperCase();
+  const deliverablesStatus = (selectedMeeting?.deliverables_status || "NONE").toUpperCase();
+
+  const canGenerate = !!selectedClientId && !!selectedMeetingId && tasksStatus === "APPROVED";
+  const canRevise =
+    !!selectedClientId &&
+    !!selectedMeetingId &&
+    tasksStatus === "APPROVED" &&
+    ["GENERATED", "REVISED", "APPROVED"].includes(deliverablesStatus);
+
+  const specSheets = selectedMeeting?.spec_sheets || [];
+
+  async function refreshMeetings({ preserveSelection = true } = {}) {
+    const cid = (selectedClientId || "").trim();
+    if (!cid) {
       setMeetings([]);
-      setMeetingId("");
+      setSelectedMeetingId("");
       return;
     }
-    setErr("");
-    const data = await apiFetch(`/clients/${encodeURIComponent(selectedClientId)}/meetings`);
-    const list = data?.meetings || [];
-    setMeetings(list);
 
-    if (autoselect) {
-      // Prefer most recently updated meeting if none chosen
-      if (!meetingId && list.length) setMeetingId(list[0].meeting_id);
+    setErr("");
+    setLoading(true);
+    try {
+      const list = await fetchMeetings(cid);
+      setMeetings(list);
+
+      if (!preserveSelection) {
+        setSelectedMeetingId(list?.[0]?.meeting_id || "");
+        return;
+      }
+
+      let nextId = selectedMeetingId;
+      if (!nextId || !list.some((m) => m.meeting_id === nextId)) {
+        nextId = list.length > 0 ? list[0].meeting_id : "";
+        setSelectedMeetingId(nextId);
+      }
+    } catch (e) {
+      setErr(e.message || "Failed to load meetings");
+      setMeetings([]);
+      setSelectedMeetingId("");
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function loadDeliverables() {
+  async function hydrateDeliverablesIntoMeeting(meetingId) {
     if (!selectedClientId || !meetingId) return;
-    setErr("");
-    const d = await apiFetch(
-      `/clients/${encodeURIComponent(selectedClientId)}/meetings/${encodeURIComponent(meetingId)}/deliverables`
-    );
-
-    // Merge deliverables snapshot into meetings array (so UI reflects statuses/keys)
-    setMeetings((prev) =>
-      prev.map((m) =>
-        m.meeting_id === meetingId
-          ? {
-              ...m,
-              deliverables_status: d.deliverables_status,
-              deliverables_revision: d.deliverables_revision,
-              deliverables_language: d.deliverables_language,
-              spec_sheets: d.spec_sheets || [],
-              code_templates: d.code_templates || [],
-              last_deliverables_instructions: d.last_deliverables_instructions || "",
-            }
-          : m
-      )
-    );
-  }
-
-  async function generateDeliverables() {
-    if (!selectedClientId || !meetingId) return;
-    setBusy(true);
-    setErr("");
     try {
-      const d = await apiFetch(
-        `/clients/${encodeURIComponent(selectedClientId)}/meetings/${encodeURIComponent(meetingId)}/generate-deliverables`,
-        { method: "POST", body: JSON.stringify({ language }) }
-      );
-
+      const d = await fetchDeliverables(selectedClientId, meetingId);
       setMeetings((prev) =>
         prev.map((m) =>
           m.meeting_id === meetingId
@@ -107,10 +117,42 @@ export default function SpecSheetsTab({ selectedClientId }) {
                 deliverables_language: d.deliverables_language,
                 spec_sheets: d.spec_sheets || [],
                 code_templates: d.code_templates || [],
+                last_deliverables_instructions: d.last_deliverables_instructions || "",
               }
             : m
         )
       );
+      setAiInstructions(d.last_deliverables_instructions || "");
+    } catch {
+      // non-fatal
+    }
+  }
+
+  useEffect(() => {
+    refreshMeetings({ preserveSelection: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId]);
+
+  useEffect(() => {
+    if (selectedMeetingId) hydrateDeliverablesIntoMeeting(selectedMeetingId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMeetingId]);
+
+  async function onChangeMeeting(nextId) {
+    setSelectedMeetingId(nextId);
+    setErr("");
+    setAiInstructions("");
+    await hydrateDeliverablesIntoMeeting(nextId);
+  }
+
+  async function onGenerate() {
+    if (!canGenerate) return;
+    setErr("");
+    setBusy(true);
+    try {
+      await generateDeliverables(selectedClientId, selectedMeetingId, language);
+      await refreshMeetings({ preserveSelection: true });
+      await hydrateDeliverablesIntoMeeting(selectedMeetingId);
     } catch (e) {
       setErr(e.message || "Failed to generate deliverables");
     } finally {
@@ -118,35 +160,20 @@ export default function SpecSheetsTab({ selectedClientId }) {
     }
   }
 
-  async function reviseDeliverables() {
-    if (!selectedClientId || !meetingId) return;
-    if (!revisePrompt.trim()) {
-      setErr("Enter revision instructions first.");
+  async function onReviseWithAI() {
+    if (!canRevise) return;
+    const ins = (aiInstructions || "").trim();
+    if (!ins) {
+      setErr("Please enter instructions for the AI (what to change).");
       return;
     }
-    setBusy(true);
-    setErr("");
-    try {
-      const d = await apiFetch(
-        `/clients/${encodeURIComponent(selectedClientId)}/meetings/${encodeURIComponent(meetingId)}/revise-deliverables`,
-        { method: "POST", body: JSON.stringify({ instructions: revisePrompt }) }
-      );
 
-      setMeetings((prev) =>
-        prev.map((m) =>
-          m.meeting_id === meetingId
-            ? {
-                ...m,
-                deliverables_status: d.deliverables_status,
-                deliverables_revision: d.deliverables_revision,
-                deliverables_language: d.deliverables_language,
-                spec_sheets: d.spec_sheets || [],
-                code_templates: d.code_templates || [],
-                last_deliverables_instructions: revisePrompt,
-              }
-            : m
-        )
-      );
+    setErr("");
+    setBusy(true);
+    try {
+      await reviseDeliverables(selectedClientId, selectedMeetingId, ins);
+      await refreshMeetings({ preserveSelection: true });
+      await hydrateDeliverablesIntoMeeting(selectedMeetingId);
     } catch (e) {
       setErr(e.message || "Failed to revise deliverables");
     } finally {
@@ -154,23 +181,18 @@ export default function SpecSheetsTab({ selectedClientId }) {
     }
   }
 
-  async function approveDeliverables() {
-    if (!selectedClientId || !meetingId) return;
-    setBusy(true);
+  async function onApprove() {
+    if (!selectedClientId || !selectedMeetingId) return;
+    if (!specSheets.length) {
+      setErr("Generate deliverables first (no spec sheets exist yet).");
+      return;
+    }
     setErr("");
+    setBusy(true);
     try {
-      const d = await apiFetch(
-        `/clients/${encodeURIComponent(selectedClientId)}/meetings/${encodeURIComponent(meetingId)}/approve-deliverables`,
-        { method: "POST" }
-      );
-
-      setMeetings((prev) =>
-        prev.map((m) =>
-          m.meeting_id === meetingId
-            ? { ...m, deliverables_status: d.deliverables_status }
-            : m
-        )
-      );
+      await approveDeliverables(selectedClientId, selectedMeetingId);
+      await refreshMeetings({ preserveSelection: true });
+      await hydrateDeliverablesIntoMeeting(selectedMeetingId);
     } catch (e) {
       setErr(e.message || "Failed to approve deliverables");
     } finally {
@@ -178,166 +200,195 @@ export default function SpecSheetsTab({ selectedClientId }) {
     }
   }
 
-  useEffect(() => {
-    // load meetings when client changes
-    loadMeetings(true).catch((e) => setErr(e.message || "Failed to load meetings"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClientId]);
-
-  useEffect(() => {
-    // load deliverables whenever meeting changes (lightweight)
-    if (!selectedClientId || !meetingId) return;
-    loadDeliverables().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingId]);
-
-  if (!canUse) {
-    return <div className="smallMuted">Select a client to use Spec Sheets.</div>;
-  }
-
-  const deliverablesStatus = (selectedMeeting?.deliverables_status || "none").toLowerCase();
-  const deliverablesApproved = deliverablesStatus === "approved";
-  const specSheets = selectedMeeting?.spec_sheets || [];
-
   return (
-    <div>
-      <div className="sectionTitle">Spec Sheets</div>
+    <div style={{ marginTop: 6 }}>
+      <h2 style={{ margin: "10px 0" }}>Spec Sheets</h2>
 
-      {/* Meeting picker */}
-      <div className="controlsRow mt16">
-        <div className="smallMuted" style={{ fontWeight: 700 }}>
-          Meeting
+      {!selectedClientId ? (
+        <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+          Select a client to view meetings.
         </div>
-
-        <select
-          value={meetingId}
-          onChange={(e) => setMeetingId(e.target.value)}
-          disabled={busy}
-        >
-          <option value="">(select)</option>
-          {meetings.map((m) => (
-            <option key={m.meeting_id} value={m.meeting_id}>
-              {m.meeting_id} — {m.transcript_status || "?"}
-            </option>
-          ))}
-        </select>
-
-        <button type="button" onClick={() => loadMeetings(false)} disabled={busy}>
-          Refresh
-        </button>
-
-        <button type="button" className="btnSecondary" onClick={loadDeliverables} disabled={busy || !meetingId}>
-          Load deliverables
-        </button>
-      </div>
-
-      {meetingId && (
-        <div className="mt16 smallMuted">
-          <div>
-            <strong>Tasks:</strong>{" "}
-            {selectedMeeting?.tasks_status || "none"}{" "}
-            {tasksApproved ? "(approved)" : "(must approve tasks first)"}
-          </div>
-          <div>
-            <strong>Deliverables:</strong>{" "}
-            {selectedMeeting?.deliverables_status || "none"}{" "}
-            {selectedMeeting?.deliverables_revision ? `(rev ${selectedMeeting.deliverables_revision})` : ""}
-          </div>
-        </div>
-      )}
-
-      {err && (
-        <div className="mt16" style={{ color: "#b91c1c", fontWeight: 700 }}>
-          {err}
-        </div>
-      )}
-
-      {/* Controls */}
-      <div className="mt20" />
-
-      <div className="controlsRow">
-        <label className="smallMuted" style={{ fontWeight: 700 }}>
-          Output language
-        </label>
-
-        <select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={busy || !meetingId}>
-          <option value="R">R</option>
-          <option value="SAS">SAS</option>
-          <option value="BOTH">BOTH (separate files)</option>
-        </select>
-
-        <button
-          type="button"
-          onClick={generateDeliverables}
-          disabled={busy || !meetingId || !tasksApproved}
-        >
-          Generate spec sheets & templates
-        </button>
-
-        <button
-          type="button"
-          onClick={approveDeliverables}
-          disabled={busy || !meetingId || deliverablesApproved || !specSheets.length}
-        >
-          Approve
-        </button>
-      </div>
-
-      {/* AI revise prompt */}
-      <div className="mt20 smallMuted" style={{ fontWeight: 700 }}>
-        AI revision prompt
-      </div>
-      <textarea
-        value={revisePrompt}
-        onChange={(e) => setRevisePrompt(e.target.value)}
-        placeholder="Example: Add a spec sheet section on validation checks and common pitfalls. Keep templates as TODOs only."
-        disabled={busy || !meetingId || !tasksApproved}
-        rows={4}
-      />
-
-      <div className="controlsRow mt16">
-        <button
-          type="button"
-          onClick={reviseDeliverables}
-          disabled={busy || !meetingId || !tasksApproved}
-        >
-          Revise with AI
-        </button>
-      </div>
-
-      {/* Outputs list */}
-      <div className="mt20 sectionTitle">Generated spec sheets (S3 keys)</div>
-      {!meetingId ? (
-        <div className="smallMuted">Select a meeting.</div>
-      ) : !specSheets.length ? (
-        <div className="smallMuted">No spec sheets yet. Generate deliverables first.</div>
       ) : (
-        <div style={{ display: "grid", gap: 10 }}>
-          {specSheets.map((s) => (
+        <>
+          {/* Meeting selector row */}
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: 12,
+            }}
+          >
+            <label style={{ fontWeight: 700 }}>Meeting</label>
+
+            <select
+              value={selectedMeetingId || ""}
+              onChange={(e) => onChangeMeeting(e.target.value)}
+              disabled={loading || meetings.length === 0 || busy}
+              style={{ padding: 10, minWidth: 360, maxWidth: "100%" }}
+            >
+              {meetings.length === 0 ? (
+                <option value="" disabled>
+                  {loading ? "Loading meetings..." : "No meetings found"}
+                </option>
+              ) : null}
+
+              {meetings.map((m) => (
+                <option key={m.meeting_id} value={m.meeting_id}>
+                  {m.meeting_id} — tasks {String(m.tasks_status || "NONE")}
+                </option>
+              ))}
+            </select>
+
+            <button type="button" onClick={() => refreshMeetings()} disabled={loading || busy}>
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+
+          {err ? <div style={{ color: "crimson", marginBottom: 10 }}>{err}</div> : null}
+
+          {selectedMeeting ? (
             <div
-              key={s.s3_key}
               style={{
-                border: "1px solid rgba(15, 23, 42, 0.12)",
-                borderRadius: 12,
-                padding: 12,
-                background: "#f8fafc",
+                border: "1px solid #ddd",
+                borderRadius: 10,
+                padding: 14,
+                background: "#fff",
               }}
             >
-              <div style={{ fontWeight: 800, color: "#0f172a" }}>
-                Task {String(s.task_index).padStart(2, "0")}: {s.task_title || ""}
-              </div>
-              <div className="smallMuted" style={{ marginTop: 6 }}>
-                <strong>S3:</strong> {s.s3_key}
+              <div style={{ display: "grid", gap: 10 }}>
+                <div>
+                  <strong>Meeting ID:</strong> {selectedMeeting.meeting_id}
+                </div>
+
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <strong>Tasks:</strong>{" "}
+                    {tasksStatus === "APPROVED" ? pill(tasksStatus, "good") : pill(tasksStatus, "warn")}
+                  </div>
+                  <div>
+                    <strong>Deliverables:</strong>{" "}
+                    {deliverablesStatus === "APPROVED"
+                      ? pill(deliverablesStatus, "good")
+                      : deliverablesStatus === "GENERATED" || deliverablesStatus === "REVISED"
+                      ? pill(deliverablesStatus, "info")
+                      : pill(deliverablesStatus, "neutral")}
+                  </div>
+                  <div style={{ opacity: 0.85 }}>
+                    <strong>Updated:</strong> {fmtDate(selectedMeeting.updated_at)}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+                  <label style={{ fontWeight: 700, alignSelf: "center" }}>Language</label>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    disabled={busy || tasksStatus !== "APPROVED"}
+                    style={{ padding: 10, minWidth: 220 }}
+                  >
+                    <option value="R">R</option>
+                    <option value="SAS">SAS</option>
+                    <option value="BOTH">BOTH (separate files)</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={onGenerate}
+                    disabled={!canGenerate || busy}
+                    title={tasksStatus !== "APPROVED" ? "Approve tasks first." : ""}
+                  >
+                    {busy ? "Working..." : "Generate spec sheets & templates"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onApprove}
+                    disabled={busy || !selectedMeetingId || !specSheets.length}
+                    title={!specSheets.length ? "Generate deliverables first." : ""}
+                  >
+                    {busy ? "Working..." : "Approve"}
+                  </button>
+                </div>
+
+                {/* AI revision prompt */}
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 6 }}>AI revision prompt</div>
+                  <textarea
+                    value={aiInstructions}
+                    onChange={(e) => setAiInstructions(e.target.value)}
+                    placeholder="Example: Add a section describing QC checks. Keep spec sheets as instructions only; templates must remain TODO/comment skeletons."
+                    rows={4}
+                    style={{
+                      width: "100%",
+                      padding: 10,
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                      resize: "vertical",
+                    }}
+                    disabled={busy || tasksStatus !== "APPROVED"}
+                  />
+
+                  <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={onReviseWithAI}
+                      disabled={busy || tasksStatus !== "APPROVED" || !aiInstructions.trim()}
+                    >
+                      {busy ? "Working..." : "Revise with AI"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Spec sheet list */}
+                <div style={{ marginTop: 16 }}>
+                  <h3 style={{ margin: 0 }}>Generated Spec Sheets (S3 keys)</h3>
+
+                  {specSheets.length === 0 ? (
+                    <div style={{ marginTop: 8, opacity: 0.85 }}>
+                      No spec sheets yet. Approve tasks, then Generate.
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
+                      {specSheets.map((s) => (
+                        <div
+                          key={s.s3_key}
+                          style={{
+                            border: "1px solid #eee",
+                            borderRadius: 10,
+                            padding: 12,
+                            background: "#fafafa",
+                          }}
+                        >
+                          <div style={{ fontWeight: 800 }}>
+                            Task {String(s.task_index).padStart(2, "0")}: {s.task_title || ""}
+                          </div>
+                          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 6 }}>
+                            <strong>S3 key:</strong> {s.s3_key}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {tasksStatus !== "APPROVED" ? (
+                  <div style={{ marginTop: 14, fontSize: 13, opacity: 0.85 }}>
+                    <strong>Note:</strong> You can only generate deliverables when{" "}
+                    <code>tasks_status</code> is <code>APPROVED</code>. Current: <code>{tasksStatus}</code>
+                  </div>
+                ) : null}
               </div>
             </div>
-          ))}
-        </div>
+          ) : (
+            <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+              {loading ? "Loading..." : "No meeting selected."}
+            </div>
+          )}
+        </>
       )}
-
-      <div className="mt20 smallMuted">
-        Note: this UI lists S3 keys. If you want “Open / Preview” in the browser, add a backend endpoint that returns a
-        presigned GET URL or returns the file contents.
-      </div>
     </div>
   );
 }
