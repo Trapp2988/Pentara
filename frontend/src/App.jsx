@@ -3,12 +3,11 @@ import "./App.css";
 import ClientSelector from "./components/ClientSelector";
 import Recorder from "./components/Recorder";
 import TasksTab from "./components/TasksTab";
-import SpecSheetsTab from "./components/SpecSheetsTab";
-import CodeTemplatesTab from "./components/CodeTemplatesTab";
+import DeliverablesTab from "./components/DeliverablesTab";
 
 export default function App() {
   const [selectedClientId, setSelectedClientId] = useState("");
-  const [activeTab, setActiveTab] = useState("record"); // record | tasks | specs | templates
+  const [activeTab, setActiveTab] = useState("record"); // record | tasks | deliverables
 
   return (
     <div>
@@ -35,18 +34,10 @@ export default function App() {
 
           <button
             type="button"
-            className={`tabBtn ${activeTab === "specs" ? "tabBtnActive" : ""}`}
-            onClick={() => setActiveTab("specs")}
+            className={`tabBtn ${activeTab === "deliverables" ? "tabBtnActive" : ""}`}
+            onClick={() => setActiveTab("deliverables")}
           >
-            Spec Sheets
-          </button>
-
-          <button
-            type="button"
-            className={`tabBtn ${activeTab === "templates" ? "tabBtnActive" : ""}`}
-            onClick={() => setActiveTab("templates")}
-          >
-            Code Templates
+            Deliverables
           </button>
         </div>
       </div>
@@ -70,12 +61,11 @@ export default function App() {
           <Recorder selectedClientId={selectedClientId} />
         ) : activeTab === "tasks" ? (
           <TasksTab selectedClientId={selectedClientId} />
-        ) : activeTab === "specs" ? (
-          <SpecSheetsTab selectedClientId={selectedClientId} />
         ) : (
-          <CodeTemplatesTab selectedClientId={selectedClientId} />
+          <DeliverablesTab selectedClientId={selectedClientId} />
         )}
       </div>
     </div>
   );
 }
+
