@@ -53,3 +53,34 @@ export async function approveDeliverables(clientId, meetingId) {
     { method: "POST" }
   );
 }
+
+/**
+ * NEW: Load the actual S3 file contents for a task (spec + template).
+ * GET /deliverables-content?task_index=1&language=R
+ */
+export async function fetchDeliverableContent(clientId, meetingId, taskIndex, language) {
+  const ti = Number(taskIndex);
+  if (!ti || ti < 1) throw new Error("taskIndex must be >= 1");
+  const lang = (language || "R").toUpperCase();
+
+  const q = new URLSearchParams({
+    task_index: String(ti),
+    language: lang,
+  });
+
+  return request(
+    `/clients/${encodeURIComponent(clientId)}/meetings/${encodeURIComponent(meetingId)}/deliverables-content?${q.toString()}`,
+    { method: "GET" }
+  );
+}
+
+/**
+ * NEW: Save user edits back to S3 (spec + template).
+ * PUT /deliverables-content
+ */
+export async function saveDeliverableContent(clientId, meetingId, payload) {
+  return request(
+    `/clients/${encodeURIComponent(clientId)}/meetings/${encodeURIComponent(meetingId)}/deliverables-content`,
+    { method: "PUT", body: JSON.stringify(payload || {}) }
+  );
+}
