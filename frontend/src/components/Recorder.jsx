@@ -37,7 +37,7 @@ export default function Recorder({ selectedClientId }) {
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || `Failed to get upload URL (${res.status})`);
-    return data; // { upload_url, key, content_type, ... }
+    return data; // { upload_url, key, content_type }
   }
 
   async function startRecording() {
@@ -54,7 +54,7 @@ export default function Recorder({ selectedClientId }) {
     try {
       setStatus("prompting");
 
-      // 1) Capture the tab/screen. audio:true is REQUIRED for “Share tab audio” to appear.
+      // Capture tab/screen (audio:true is REQUIRED for tab audio)
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: 30 },
         audio: true,
@@ -64,7 +64,7 @@ export default function Recorder({ selectedClientId }) {
       const tabAudioTracks = screenStream.getAudioTracks();
       const hasTabAudio = tabAudioTracks.length > 0;
 
-      // 2) Capture mic (optional). If denied, we still proceed with tab audio.
+      // Optional mic
       let micStream = null;
       try {
         micStream = await navigator.mediaDevices.getUserMedia({
@@ -76,15 +76,15 @@ export default function Recorder({ selectedClientId }) {
       }
       micStreamRef.current = micStream;
 
-      // 3) Mix tab audio + mic into ONE track.
+      // Mix tab + mic audio
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const destination = audioContext.createMediaStreamDestination();
 
       if (hasTabAudio) {
-        const tabAudioSource = audioContext.createMediaStreamSource(
+        const tabSource = audioContext.createMediaStreamSource(
           new MediaStream([tabAudioTracks[0]])
         );
-        tabAudioSource.connect(destination);
+        tabSource.connect(destination);
       }
 
       if (micStream && micStream.getAudioTracks().length > 0) {
@@ -93,7 +93,7 @@ export default function Recorder({ selectedClientId }) {
       }
 
       const videoTrack = screenStream.getVideoTracks()[0];
-      const mixedAudioTrack = destination.stream.getAudioTracks()[0]; // may be undefined
+      const mixedAudioTrack = destination.stream.getAudioTracks()[0];
 
       const finalTracks = [videoTrack];
       if (mixedAudioTrack) finalTracks.push(mixedAudioTrack);
@@ -101,7 +101,7 @@ export default function Recorder({ selectedClientId }) {
       const mixedStream = new MediaStream(finalTracks);
       mixedStreamRef.current = mixedStream;
 
-      // 4) Create MediaRecorder
+      // MediaRecorder
       const mimeType = pickBestMimeType();
       const recorder = new MediaRecorder(mixedStream, mimeType ? { mimeType } : undefined);
       recorderRef.current = recorder;
@@ -112,9 +112,10 @@ export default function Recorder({ selectedClientId }) {
       };
 
       recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "video/webm" });
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "video/webm",
+        });
 
-        // Optional: keep local download link for debugging
         const url = URL.createObjectURL(blob);
         setDownloadUrl(url);
 
@@ -125,10 +126,8 @@ export default function Recorder({ selectedClientId }) {
         try {
           setStatus("uploading");
 
-          // 1) get presigned URL
-          const { upload_url, key, content_type } = await getUploadUrl(blob.type || "video/webm");
+          const { upload_url, key, content_type } = await getUploadUrl(blob.type);
 
-          // 2) PUT blob to S3
           const put = await fetch(upload_url, {
             method: "PUT",
             headers: { "Content-Type": content_type },
@@ -150,7 +149,7 @@ export default function Recorder({ selectedClientId }) {
 
       if (!hasTabAudio) {
         setError(
-          "Recording started, but TAB audio was not detected. In the share picker, choose the Google Meet TAB and enable 'Share tab audio', then stop and try again."
+          "Recording started, but tab audio was not detected. Choose the Google Meet tab and enable 'Share tab audio'."
         );
       }
     } catch (e) {
@@ -201,31 +200,28 @@ export default function Recorder({ selectedClientId }) {
   return (
     <div style={{ marginTop: 6 }}>
       <h2 style={{ margin: "10px 0" }}>Record</h2>
-    
+
       {!selectedClientId ? (
         <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
           Select a client to start recording.
         </div>
       ) : (
         <>
-          {/* Instructions (top of Record tab) */}
           <div className="instructionsBox" style={{ marginBottom: 12 }}>
-            <strong>Instructions</strong>
+            <strong>Recording workflow</strong>
             <ol>
               <li>Click <b>Start Recording</b></li>
-              <li>In the picker, choose <b>Chrome Tab</b></li>
+              <li>Choose <b>Chrome Tab</b></li>
               <li>Select the <b>Google Meet</b> tab</li>
               <li>Enable <b>Share tab audio</b></li>
               <li>Click <b>Share</b></li>
-              <li>When finished, click <b>Stop</b> to upload and transcribe</li>
+              <li>Click <b>Stop</b> when finished</li>
             </ol>
-    
-            <div className="smallMuted" style={{ marginTop: 6 }}>
-              Tip: If you don’t see “Share tab audio,” you likely selected “Window” instead of “Chrome Tab.”
+            <div className="smallMuted">
+              Tip: If you don't see "Share tab audio", you selected the wrong capture type.
             </div>
           </div>
-    
-          {/* Main recorder card */}
+
           <div
             style={{
               maxWidth: 720,
@@ -235,42 +231,37 @@ export default function Recorder({ selectedClientId }) {
               background: "#fff",
             }}
           >
-            <h3 style={{ marginTop: 0, marginBottom: 10 }}>Meeting Recorder</h3>
-    
+            <h3 style={{ marginTop: 0 }}>Meeting Recorder</h3>
+
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button onClick={startRecording} disabled={!canStart}>
                 Start Recording
               </button>
-    
               <button onClick={stopRecording} disabled={!canStop}>
                 Stop
               </button>
-    
               <button onClick={download} disabled={!canDownload} className="btnSecondary">
                 Download (optional)
               </button>
             </div>
-    
+
             <div style={{ marginTop: 12 }}>
-              <div>
-                <b>Status:</b> {status}
-              </div>
-    
-              {error ? <div style={{ color: "crimson", marginTop: 8 }}>{error}</div> : null}
-    
-              {uploadedKey ? (
+              <div><b>Status:</b> {status}</div>
+              {error && <div style={{ color: "crimson", marginTop: 8 }}>{error}</div>}
+              {uploadedKey && (
                 <div style={{ marginTop: 8 }}>
                   <b>Uploaded to S3:</b> <code>{uploadedKey}</code>
                 </div>
-              ) : null}
-    
-              {downloadUrl ? (
+              )}
+              {downloadUrl && (
                 <div style={{ marginTop: 8 }}>
                   Local file: <code>{filename}</code>
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
         </>
       )}
     </div>
+  );
+}
