@@ -184,7 +184,7 @@ select:disabled {
   padding: 10px 16px;
   border: 1px solid transparent;
   background: transparent;
-  color: rgba(255, 255, 255, 0.9); /* visible on dark background */
+  color: #0b1220;              /* BLACK text */
   font-weight: 800;
   cursor: pointer;
 }
@@ -192,7 +192,7 @@ select:disabled {
 /* Active tab */
 .tabBtnActive {
   background: var(--pentara-blue);
-  color: #fff;
+  color: #0b1220;              /* BLACK text even when active */
   border-color: var(--pentara-blue);
 }
 
