@@ -401,6 +401,17 @@ export default function DeliverablesTab({ selectedClientId }) {
         </div>
       ) : (
         <>
+           {/* Instructions (top of Deliverables tab) */}
+            <div className="instructionsBox">
+              <strong>Deliverables workflow</strong>
+              <ol>
+                <li>Tasks must be approved before generating deliverables.</li>
+                <li>Select the programming language (R or SAS).</li>
+                <li>Generate spec sheets and code templates for each task.</li>
+                <li>Edit deliverables directly in the app if needed.</li>
+                <li>Approve deliverables when finalized.</li>
+              </ol>
+            </div>
           <div
             style={{
               display: "flex",
