@@ -406,7 +406,7 @@ export default function TasksTab({ selectedClientId }) {
 
               {meetings.map((m) => (
                 <option key={m.meeting_id} value={m.meeting_id}>
-                  {m.meeting_id} — transcript {String(m.transcript_status || "UNKNOWN")}
+                  {formatMeetingLabel(m)} — transcript {m.transcript_status}
                 </option>
               ))}
             </select>
@@ -432,7 +432,7 @@ export default function TasksTab({ selectedClientId }) {
             >
               <div style={{ display: "grid", gap: 10 }}>
                 <div>
-                  <strong>Meeting ID:</strong> {selectedMeeting.meeting_id}
+                  <strong>Meeting ID:</strong> {formatMeetingIdShort(selectedMeeting.meeting_id)}
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
