@@ -12,7 +12,7 @@ export default function App() {
   return (
     <div>
       <h1>Pentara Meeting Assistant</h1>
-      <p>Select a client (from DynamoDB), then record a meeting or generate tasks.</p>
+      <p>Turn client meetings into structured tasks, spec sheets, and code templates.</p>
 
       <div className="tabsRow">
         <div className="tabs">
