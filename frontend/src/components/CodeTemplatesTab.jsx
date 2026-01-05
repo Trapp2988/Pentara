@@ -186,9 +186,10 @@ export default function CodeTemplatesTab({ selectedClientId }) {
 
               {meetings.map((m) => (
                 <option key={m.meeting_id} value={m.meeting_id}>
-                  {m.meeting_id} — deliverables {String(m.deliverables_status || "NONE")}
+                  {formatMeetingLabel(m)} — transcript {m.transcript_status}
                 </option>
               ))}
+              
             </select>
 
             <button type="button" onClick={() => refreshMeetings()} disabled={loading || busy}>
@@ -213,7 +214,7 @@ export default function CodeTemplatesTab({ selectedClientId }) {
             >
               <div style={{ display: "grid", gap: 10 }}>
                 <div>
-                  <strong>Meeting ID:</strong> {selectedMeeting.meeting_id}
+                  <strong>Meeting ID:</strong> {formatMeetingIdShort(selectedMeeting.meeting_id)}
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
