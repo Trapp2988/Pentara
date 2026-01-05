@@ -64,6 +64,21 @@ p {
   color: var(--text-dark);
 }
 
+.instructionsBox {
+  background: var(--subtle-bg);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.instructionsBox strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+
 /* Small section label */
 .sectionTitle {
   font-weight: 800;
