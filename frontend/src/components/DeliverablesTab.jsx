@@ -9,6 +9,22 @@ import {
   saveDeliverableContent,
 } from "../api/deliverablesApi";
 
+function formatMeetingDisplay(meeting) {
+  // Option 1: "Jan 5, 2026 • Client Kickoff" (falls back if no label)
+  const d = new Date(meeting.created_at || meeting.updated_at || "");
+  const dateStr = isNaN(d.getTime())
+    ? ""
+    : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+
+  const label = (meeting.meeting_label || "").trim();
+
+  if (dateStr && label) return `${dateStr} • ${label}`;
+  if (dateStr) return dateStr;              // fallback: just date
+  if (label) return label;                  // fallback: just label
+  return meeting.meeting_id;                // final fallback
+}
+
+
 function fmtDate(iso) {
   if (!iso) return "";
   try {
@@ -401,9 +417,10 @@ export default function DeliverablesTab({ selectedClientId }) {
                 background: "#fff",
               }}
             >
-              <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gap: 6 }}>
                 <div>
-                  <strong>Meeting ID:</strong> {selectedMeeting.meeting_id}
+                  <strong>Meeting:</strong>{" "}
+                  {formatMeetingDisplay(selectedMeeting)}
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
