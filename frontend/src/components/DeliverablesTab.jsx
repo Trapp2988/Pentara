@@ -206,7 +206,7 @@ export default function DeliverablesTab({ selectedClientId }) {
     const hasDirty = Object.values(taskDrafts).some((d) => d?.dirty);
     if (hasDirty) {
       const ok = window.confirm(
-        "You have unsaved deliverable edits. Switching meetings will discard them. Continue?"
+        "You have unsaved spec sheet/code template edits. Switching meetings will discard them. Continue?"
       );
       if (!ok) return;
     }
@@ -228,7 +228,7 @@ export default function DeliverablesTab({ selectedClientId }) {
       await hydrateDeliverablesIntoMeeting(selectedMeetingId);
       setTaskDrafts({});
     } catch (e) {
-      setErr(e.message || "Failed to generate deliverables");
+      setErr(e.message || "Failed to generate spec sheet/code template");
     } finally {
       setBusy(false);
     }
@@ -246,7 +246,7 @@ export default function DeliverablesTab({ selectedClientId }) {
     const hasDirty = Object.values(taskDrafts).some((d) => d?.dirty);
     if (hasDirty) {
       const ok = window.confirm(
-        "You have unsaved edits. Revise with AI will overwrite S3 deliverables using the saved versions. Save drafts first if you want to keep them. Continue?"
+        "You have unsaved edits. Revise with AI will overwrite S3 spec sheet/code template using the saved versions. Save drafts first if you want to keep them. Continue?"
       );
       if (!ok) return;
     }
@@ -259,7 +259,7 @@ export default function DeliverablesTab({ selectedClientId }) {
       await hydrateDeliverablesIntoMeeting(selectedMeetingId);
       setTaskDrafts({});
     } catch (e) {
-      setErr(e.message || "Failed to revise deliverables");
+      setErr(e.message || "Failed to revise spec sheet/code template");
     } finally {
       setBusy(false);
     }
@@ -286,7 +286,7 @@ export default function DeliverablesTab({ selectedClientId }) {
       await refreshMeetings({ preserveSelection: true });
       await hydrateDeliverablesIntoMeeting(selectedMeetingId);
     } catch (e) {
-      setErr(e.message || "Failed to approve deliverables");
+      setErr(e.message || "Failed to approve spec sheet/code tempalte");
     } finally {
       setBusy(false);
     }
@@ -324,7 +324,7 @@ export default function DeliverablesTab({ selectedClientId }) {
         },
       }));
     } catch (e) {
-      setErr(e.message || "Failed to load task deliverables");
+      setErr(e.message || "Failed to load task spec sheet/code template");
       setTaskDrafts((prev) => ({
         ...prev,
         [key]: { ...(prev[key] || {}), loading: false },
@@ -393,7 +393,7 @@ export default function DeliverablesTab({ selectedClientId }) {
 
   return (
     <div style={{ marginTop: 6 }}>
-      <h2 style={{ margin: "10px 0" }}>Deliverables</h2>
+      <h2 style={{ margin: "10px 0" }}>Spec Sheet & Code Template</h2>
 
       {!selectedClientId ? (
         <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
@@ -405,11 +405,11 @@ export default function DeliverablesTab({ selectedClientId }) {
             <div className="instructionsBox">
               <strong>Instructions</strong>
               <ol>
-                <li>Tasks must be approved before generating deliverables.</li>
+                <li>Tasks must be approved before generating spec sheet/code template.</li>
                 <li>Select the programming language (R or SAS).</li>
                 <li>Generate spec sheets and code templates for each task.</li>
-                <li>Edit deliverables directly in the app if needed.</li>
-                <li>Approve deliverables when finalized.</li>
+                <li>Edit spec sheet/code template directly in the app if needed.</li>
+                <li>Approve spec sheet/code template when finalized.</li>
               </ol>
             </div>
           <div
@@ -512,7 +512,7 @@ export default function DeliverablesTab({ selectedClientId }) {
                     disabled={!canGenerate || busy}
                     title={tasksStatus !== "APPROVED" ? "Approve tasks first." : ""}
                   >
-                    {busy ? "Working..." : "Generate deliverables"}
+                    {busy ? "Working..." : "Generate spec sheets and code templates"}
                   </button>
 
                   <button
@@ -563,7 +563,7 @@ export default function DeliverablesTab({ selectedClientId }) {
 
                   {specIndex.length === 0 ? (
                     <div style={{ marginTop: 8, opacity: 0.85 }}>
-                      No deliverables yet. Approve tasks, then Generate.
+                      No spec sheet or code templates yet. Approve tasks, then Generate.
                     </div>
                   ) : (
                     <div style={{ display: "grid", gap: 14, marginTop: 10 }}>
