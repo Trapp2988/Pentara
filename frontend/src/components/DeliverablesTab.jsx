@@ -9,6 +9,36 @@ import {
   saveDeliverableContent,
 } from "../api/deliverablesApi";
 
+function meetingDateLabel(meetingId) {
+  // Expected: YYYYMMDDTHHMMSSZ-xxxxxxxx
+  const m = String(meetingId || "").match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z-/);
+  if (!m) return null;
+
+  const [_, yyyy, MM, dd, HH, mm, ss] = m;
+  const dt = new Date(Date.UTC(+yyyy, +MM - 1, +dd, +HH, +mm, +ss));
+
+  // Option 1: date only
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function shortMeetingId(meetingId) {
+  const s = String(meetingId || "");
+  const parts = s.split("-");
+  const tail = parts[parts.length - 1];
+  // last segment is usually the 8-char suffix; fallback to last 8 of full string
+  return tail && tail.length <= 12 ? tail : s.slice(-8);
+}
+
+function meetingLabel(m) {
+  if (!m) return "";
+  const date = meetingDateLabel(m.meeting_id) || m.meeting_id;
+  const shortId = shortMeetingId(m.meeting_id);
+
+  // Customize the right-hand “status” text per tab (examples below)
+  return { date, shortId };
+}
+
+
 function formatMeetingDisplay(meeting) {
   // Option 1: "Jan 5, 2026 • Client Kickoff" (falls back if no label)
   const d = new Date(meeting.created_at || meeting.updated_at || "");
@@ -394,11 +424,16 @@ export default function DeliverablesTab({ selectedClientId }) {
                 </option>
               ) : null}
 
-              {meetings.map((m) => (
-                <option key={m.meeting_id} value={m.meeting_id}>
-                  {m.meeting_id} — tasks {String(m.tasks_status || "NONE")}
-                </option>
-              ))}
+              {meetings.map((m) => {
+                const label = meetingDateLabel(m.meeting_id) || m.meeting_id;
+                const shortId = shortMeetingId(m.meeting_id);
+              
+                return (
+                  <option key={m.meeting_id} value={m.meeting_id}>
+                    {label} • {shortId} — tasks {String(m.tasks_status || "NONE")}
+                  </option>
+                );
+              })}
             </select>
 
             <button type="button" onClick={() => refreshMeetings()} disabled={loading || busy}>
