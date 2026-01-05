@@ -403,7 +403,7 @@ export default function DeliverablesTab({ selectedClientId }) {
         <>
            {/* Instructions (top of Deliverables tab) */}
             <div className="instructionsBox">
-              <strong>Deliverables workflow</strong>
+              <strong>Instructions</strong>
               <ol>
                 <li>Tasks must be approved before generating deliverables.</li>
                 <li>Select the programming language (R or SAS).</li>
