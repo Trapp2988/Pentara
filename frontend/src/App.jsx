@@ -37,7 +37,7 @@ export default function App() {
             className={`tabBtn ${activeTab === "deliverables" ? "tabBtnActive" : ""}`}
             onClick={() => setActiveTab("deliverables")}
           >
-            Deliverables
+            Spec Sheet / Code Template
           </button>
         </div>
       </div>
