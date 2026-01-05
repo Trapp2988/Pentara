@@ -380,6 +380,16 @@ export default function TasksTab({ selectedClientId }) {
         </div>
       ) : (
         <>
+          {/* Instructions (top of Tasks tab) */}
+          <div className="instructionsBox">
+            <strong>How this works</strong>
+            <ol>
+              <li>Select a meeting with a completed transcript.</li>
+              <li>Click <b>Generate tasks & questions</b>.</li>
+              <li>Review/edit tasks and research questions.</li>
+              <li>Approve tasks to unlock deliverables (spec sheets + code templates).</li>
+            </ol>
+          </div>
           {/* Meeting selector row */}
           <div
             style={{
