@@ -2,6 +2,57 @@ import React, { useEffect, useMemo, useState } from "react";
 import { fetchMeetings } from "../api/meetingsApi";
 import { fetchDeliverables } from "../api/deliverablesApi";
 
+function parseMeetingId(meetingId) {
+  // Expected: YYYYMMDDTHHMMSSZ-xxxxxxxx
+  if (!meetingId || typeof meetingId !== "string") return { date: null, suffix: "" };
+
+  const [stamp, suffixRaw] = meetingId.split("-");
+  const suffix = suffixRaw || "";
+
+  // stamp like: 20260102T200740Z
+  if (!stamp || stamp.length < 16 || stamp[8] !== "T") return { date: null, suffix };
+
+  const yyyy = Number(stamp.slice(0, 4));
+  const MM = Number(stamp.slice(4, 6));
+  const dd = Number(stamp.slice(6, 8));
+  const hh = Number(stamp.slice(9, 11));
+  const mm = Number(stamp.slice(11, 13));
+  const ss = Number(stamp.slice(13, 15));
+
+  if ([yyyy, MM, dd, hh, mm, ss].some((n) => Number.isNaN(n))) return { date: null, suffix };
+
+  // Meeting IDs are in UTC because they end with "Z"
+  const date = new Date(Date.UTC(yyyy, MM - 1, dd, hh, mm, ss));
+  return { date, suffix };
+}
+
+function formatMeetingLabel(meeting) {
+  const id = meeting?.meeting_id;
+  if (!id) return "";
+
+  const { date, suffix } = parseMeetingId(id);
+  const nice = date
+    ? date.toLocaleString([], {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : id;
+
+  return suffix ? `${nice} — ${suffix}` : nice;
+}
+
+function formatMeetingIdShort(meetingId) {
+  const { date, suffix } = parseMeetingId(meetingId);
+  const nice = date
+    ? date.toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : meetingId;
+  return suffix ? `${nice} — ${suffix}` : nice;
+}
+
+
 function fmtDate(iso) {
   if (!iso) return "";
   try {
