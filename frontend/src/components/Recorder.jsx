@@ -199,51 +199,78 @@ export default function Recorder({ selectedClientId }) {
   const canDownload = !!downloadUrl;
 
   return (
-    <div style={{ maxWidth: 720, padding: 16, border: "1px solid #ddd", borderRadius: 8 }}>
-      <h2 style={{ marginTop: 0 }}>Meeting Recorder</h2>
-
-      <ol style={{ marginTop: 0 }}>
-        <li>Click <b>Start Recording</b></li>
-        <li>In the picker, choose <b>Chrome Tab</b></li>
-        <li>Select the <b>Google Meet tab</b></li>
-        <li>Enable <b>Share tab audio</b></li>
-        <li>Click <b>Share</b></li>
-      </ol>
-
+    <div style={{ marginTop: 6 }}>
+      <h2 style={{ margin: "10px 0" }}>Record</h2>
+    
       {!selectedClientId ? (
-        <div style={{ color: "crimson", marginBottom: 10 }}>
-          Select a client first (upload path depends on client_id).
+        <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+          Select a client to start recording.
         </div>
-      ) : null}
-
-      <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={startRecording} disabled={!canStart} style={{ padding: "8px 12px" }}>
-          Start Recording
-        </button>
-        <button onClick={stopRecording} disabled={!canStop} style={{ padding: "8px 12px" }}>
-          Stop
-        </button>
-        <button onClick={download} disabled={!canDownload} style={{ padding: "8px 12px" }}>
-          Download (optional)
-        </button>
-      </div>
-
-      <div style={{ marginTop: 12 }}>
-        <div><b>Status:</b> {status}</div>
-        {error ? <div style={{ color: "crimson", marginTop: 8 }}>{error}</div> : null}
-
-        {uploadedKey ? (
-          <div style={{ marginTop: 8 }}>
-            <b>Uploaded to S3:</b> <code>{uploadedKey}</code>
+      ) : (
+        <>
+          {/* Instructions (top of Record tab) */}
+          <div className="instructionsBox" style={{ marginBottom: 12 }}>
+            <strong>Instructions</strong>
+            <ol>
+              <li>Click <b>Start Recording</b></li>
+              <li>In the picker, choose <b>Chrome Tab</b></li>
+              <li>Select the <b>Google Meet</b> tab</li>
+              <li>Enable <b>Share tab audio</b></li>
+              <li>Click <b>Share</b></li>
+              <li>When finished, click <b>Stop</b> to upload and transcribe</li>
+            </ol>
+    
+            <div className="smallMuted" style={{ marginTop: 6 }}>
+              Tip: If you don’t see “Share tab audio,” you likely selected “Window” instead of “Chrome Tab.”
+            </div>
           </div>
-        ) : null}
-
-        {downloadUrl ? (
-          <div style={{ marginTop: 8 }}>
-            Local file: <code>{filename}</code>
+    
+          {/* Main recorder card */}
+          <div
+            style={{
+              maxWidth: 720,
+              padding: 16,
+              border: "1px solid #ddd",
+              borderRadius: 8,
+              background: "#fff",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: 10 }}>Meeting Recorder</h3>
+    
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button onClick={startRecording} disabled={!canStart}>
+                Start Recording
+              </button>
+    
+              <button onClick={stopRecording} disabled={!canStop}>
+                Stop
+              </button>
+    
+              <button onClick={download} disabled={!canDownload} className="btnSecondary">
+                Download (optional)
+              </button>
+            </div>
+    
+            <div style={{ marginTop: 12 }}>
+              <div>
+                <b>Status:</b> {status}
+              </div>
+    
+              {error ? <div style={{ color: "crimson", marginTop: 8 }}>{error}</div> : null}
+    
+              {uploadedKey ? (
+                <div style={{ marginTop: 8 }}>
+                  <b>Uploaded to S3:</b> <code>{uploadedKey}</code>
+                </div>
+              ) : null}
+    
+              {downloadUrl ? (
+                <div style={{ marginTop: 8 }}>
+                  Local file: <code>{filename}</code>
+                </div>
+              ) : null}
+            </div>
           </div>
-        ) : null}
-      </div>
+        </>
+      )}
     </div>
-  );
-}
