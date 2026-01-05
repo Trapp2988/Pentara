@@ -208,7 +208,7 @@ export default function Recorder({ selectedClientId }) {
       ) : (
         <>
           <div className="instructionsBox" style={{ marginBottom: 12 }}>
-            <strong>Recording workflow</strong>
+            <strong>Instructions</strong>
             <ol>
               <li>Click <b>Start Recording</b></li>
               <li>Choose <b>Chrome Tab</b></li>
