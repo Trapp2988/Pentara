@@ -287,7 +287,7 @@ export default function SpecSheetsTab({ selectedClientId }) {
 
               {meetings.map((m) => (
                 <option key={m.meeting_id} value={m.meeting_id}>
-                  {m.meeting_id} — tasks {String(m.tasks_status || "NONE")}
+                  {m.meeting_id} — transcript {m.transcript_status}
                 </option>
               ))}
             </select>
@@ -310,7 +310,7 @@ export default function SpecSheetsTab({ selectedClientId }) {
             >
               <div style={{ display: "grid", gap: 10 }}>
                 <div>
-                  <strong>Meeting ID:</strong> {selectedMeeting.meeting_id}
+                  <strong>Meeting ID:</strong> {formatMeetingIdShort(selectedMeeting.meeting_id)}
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
