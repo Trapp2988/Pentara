@@ -9,6 +9,25 @@ import {
   saveDeliverableContent,
 } from "../api/deliverablesApi";
 
+function withMeetingNumbers(meetings) {
+  // Stable numbering: oldest meeting = #1, newest = #N
+  const sortedAsc = [...(meetings || [])].sort((a, b) => {
+    const ta = new Date(a.created_at || a.updated_at || 0).getTime();
+    const tb = new Date(b.created_at || b.updated_at || 0).getTime();
+    return ta - tb;
+  });
+
+  const idToNumber = new Map();
+  sortedAsc.forEach((m, idx) => {
+    idToNumber.set(m.meeting_id, idx + 1);
+  });
+
+  return (meetings || []).map((m) => ({
+    ...m,
+    meeting_number: idToNumber.get(m.meeting_id),
+  }));
+}
+
 function meetingDateLabel(meetingId) {
   // Expected: YYYYMMDDTHHMMSSZ-xxxxxxxx
   const m = String(meetingId || "").match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z-/);
@@ -145,7 +164,7 @@ export default function DeliverablesTab({ selectedClientId }) {
     setLoading(true);
     try {
       const list = await fetchMeetings(cid);
-      setMeetings(list);
+      setMeetings(withMeetingNumbers(list));
 
       if (!preserveSelection) {
         const firstId = list?.[0]?.meeting_id || "";
@@ -440,12 +459,12 @@ export default function DeliverablesTab({ selectedClientId }) {
               ) : null}
 
               {meetings.map((m) => {
-                const label = meetingDateLabel(m.meeting_id) || m.meeting_id;
-                const shortId = shortMeetingId(m.meeting_id);
-              
+                const dateLabel = meetingDateLabel(m.meeting_id) || meetingDateLabelFromIso(m.created_at || m.updated_at) || "Meeting";
+                const n = m.meeting_number || "?";
+                
                 return (
                   <option key={m.meeting_id} value={m.meeting_id}>
-                    {label} • {shortId} — tasks {String(m.tasks_status || "NONE")}
+                    {dateLabel} • meeting #{n} — tasks {String(m.tasks_status || "NONE")}
                   </option>
                 );
               })}
