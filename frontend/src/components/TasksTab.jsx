@@ -184,18 +184,17 @@ export default function TasksTab({ selectedClientId }) {
 
   const hasServerOutputs = useMemo(() => {
     const t = selectedMeeting?.tasks || [];
-    const q = selectedMeeting?.research_questions || [];
-    return (Array.isArray(t) && t.length > 0) || (Array.isArray(q) && q.length > 0);
+    return Array.isArray(t) && t.length > 0;
   }, [selectedMeeting]);
 
   const dirty = useMemo(() => {
     const base = baselineRef.current;
     return !deepEqualJson(draftTasks, base.tasks);
-  }, [draftTasks, draftQuestions]);
+  }, [draftTasks]);
 
   function loadDraftFromMeeting(meeting) {
     const serverTasks = normalizeTasks(meeting?.tasks || []);
-    baselineRef.current = {tasks: serverTasks};
+    baselineRef.current = { tasks: serverTasks };
     setDraftTasks(serverTasks);
     setAiInstructions(meeting?.last_instructions || "");
   }
@@ -206,7 +205,7 @@ export default function TasksTab({ selectedClientId }) {
       setMeetings([]);
       setSelectedMeetingId("");
       setDraftTasks([]);
-      baselineRef.current = { tasks: []};
+      baselineRef.current = { tasks: [] };
       return;
     }
 
@@ -236,16 +235,14 @@ export default function TasksTab({ selectedClientId }) {
         loadDraftFromMeeting(m);
       } else {
         setDraftTasks([]);
-        setDraftQuestions([]);
-        baselineRef.current = { tasks: [], research_questions: [] };
+        baselineRef.current = { tasks: [] };
       }
     } catch (e) {
       setErr(e.message || "Failed to load meetings");
       setMeetings([]);
       setSelectedMeetingId("");
       setDraftTasks([]);
-      setDraftQuestions([]);
-      baselineRef.current = { tasks: [], research_questions: [] };
+      baselineRef.current = { tasks: [] };
     } finally {
       setLoading(false);
     }
@@ -311,10 +308,6 @@ export default function TasksTab({ selectedClientId }) {
           description: (t.description || "").trim(),
         }))
         .filter((t) => t.title || t.description);
-
-      const cleanedQs = (draftQuestions || [])
-        .map((q) => (q || "").trim())
-        .filter((q) => q.length > 0);
 
       await saveTasks(selectedClientId, selectedMeetingId, {
         tasks: cleanedTasks,
@@ -645,7 +638,7 @@ export default function TasksTab({ selectedClientId }) {
                                     onChange={(e) => updateTask(idx, { description: e.target.value })}
                                     placeholder="Task description"
                                     rows={3}
-                                    style={
+                                    style={{
                                       width: "100%",
                                       padding: 10,
                                       border: "1px solid #ddd",
@@ -683,5 +676,3 @@ export default function TasksTab({ selectedClientId }) {
     </div>
   );
 }
-
-
