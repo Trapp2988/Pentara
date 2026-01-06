@@ -1,7 +1,7 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 function friendlyServiceUnavailableMessage() {
-  return "Still processing. Please wait 10–20 seconds, then click Refresh (avoid repeated clicks).";
+  return "Still processing. Please wait ~1 minute, then click 'Reload' next to the task.";
 }
 
 async function request(path, options = {}) {
