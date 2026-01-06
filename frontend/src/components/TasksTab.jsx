@@ -35,7 +35,7 @@ function formatMeetingLabel(meeting) {
   const id = meeting?.meeting_id;
   if (!id) return "";
 
-  const { date, suffix } = parseMeetingId(id);
+  const { date } = parseMeetingId(id);
   const nice = date
     ? date.toLocaleString([], {
         year: "numeric",
@@ -46,17 +46,28 @@ function formatMeetingLabel(meeting) {
       })
     : id;
 
-  return suffix ? `${nice} — ${suffix}` : nice;
+  const n = meeting?.meeting_number;
+  return n ? `${nice} • meeting #${n}` : nice;
 }
 
-function formatMeetingIdShort(meetingId) {
-  const { date, suffix } = parseMeetingId(meetingId);
+function formatMeetingIdShort(meeting) {
+  const id = meeting?.meeting_id;
+  if (!id) return "";
+
+  const { date } = parseMeetingId(id);
   const nice = date
-    ? date.toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-    : meetingId;
-  return suffix ? `${nice} — ${suffix}` : nice;
-}
+    ? date.toLocaleString([], {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : id;
 
+  const n = meeting?.meeting_number;
+  return n ? `${nice} • meeting #${n}` : nice;
+}
 
 function fmtDate(iso) {
   if (!iso) return "";
@@ -107,6 +118,37 @@ function deepEqualJson(a, b) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Adds UI-only meeting_number per client:
+ * oldest = #1, newest = #N (based on created_at/updated_at fallback to meeting_id timestamp)
+ */
+function withMeetingNumbers(meetings) {
+  const list = Array.isArray(meetings) ? meetings : [];
+
+  function ts(m) {
+    const t1 = new Date(m?.created_at || "").getTime();
+    if (!Number.isNaN(t1) && t1 > 0) return t1;
+
+    const t2 = new Date(m?.updated_at || "").getTime();
+    if (!Number.isNaN(t2) && t2 > 0) return t2;
+
+    const { date } = parseMeetingId(m?.meeting_id || "");
+    const t3 = date ? date.getTime() : 0;
+    return t3 || 0;
+  }
+
+  const sortedAsc = [...list].sort((a, b) => ts(a) - ts(b));
+  const idToNum = new Map();
+  sortedAsc.forEach((m, idx) => {
+    if (m?.meeting_id) idToNum.set(m.meeting_id, idx + 1);
+  });
+
+  return list.map((m) => ({
+    ...m,
+    meeting_number: idToNum.get(m.meeting_id),
+  }));
 }
 
 export default function TasksTab({ selectedClientId }) {
@@ -186,7 +228,8 @@ export default function TasksTab({ selectedClientId }) {
     setErr("");
     setLoading(true);
     try {
-      const list = await fetchMeetings(cid);
+      const raw = await fetchMeetings(cid);
+      const list = withMeetingNumbers(raw);
       setMeetings(list);
 
       if (!preserveSelection) {
@@ -390,6 +433,7 @@ export default function TasksTab({ selectedClientId }) {
               <li>Approve tasks to unlock deliverables (spec sheets + code templates).</li>
             </ol>
           </div>
+
           {/* Meeting selector row */}
           <div
             style={{
@@ -442,7 +486,7 @@ export default function TasksTab({ selectedClientId }) {
             >
               <div style={{ display: "grid", gap: 10 }}>
                 <div>
-                  <strong>Meeting ID:</strong> {formatMeetingIdShort(selectedMeeting.meeting_id)}
+                  <strong>Meeting:</strong> {formatMeetingIdShort(selectedMeeting)}
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -730,4 +774,5 @@ export default function TasksTab({ selectedClientId }) {
     </div>
   );
 }
+
 
