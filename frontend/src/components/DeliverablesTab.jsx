@@ -100,7 +100,11 @@ export default function DeliverablesTab({ selectedClientId }) {
   const [selectedMeetingId, setSelectedMeetingId] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [revising, setRevising] = useState(false);
+  const [approving, setApproving] = useState(false);
+  
+  const busy = generating || revising || approving;
   const [err, setErr] = useState("");
 
   const [language, setLanguage] = useState("R"); // used for "Generate" only (R|SAS|BOTH)
@@ -221,7 +225,7 @@ export default function DeliverablesTab({ selectedClientId }) {
   async function onGenerate() {
     if (!canGenerate) return;
     setErr("");
-    setBusy(true);
+    setGenerating(true);
     try {
       await generateDeliverables(selectedClientId, selectedMeetingId, language);
       await refreshMeetings({ preserveSelection: true });
@@ -230,7 +234,7 @@ export default function DeliverablesTab({ selectedClientId }) {
     } catch (e) {
       setErr(e.message || "Failed to generate spec sheet/code template");
     } finally {
-      setBusy(false);
+      setGenerating(false);
     }
   }
 
@@ -252,7 +256,7 @@ export default function DeliverablesTab({ selectedClientId }) {
     }
 
     setErr("");
-    setBusy(true);
+    setRevising(true);
     try {
       await reviseDeliverables(selectedClientId, selectedMeetingId, ins);
       await refreshMeetings({ preserveSelection: true });
@@ -261,7 +265,7 @@ export default function DeliverablesTab({ selectedClientId }) {
     } catch (e) {
       setErr(e.message || "Failed to revise spec sheet/code template");
     } finally {
-      setBusy(false);
+      setRevising(false);
     }
   }
 
@@ -280,7 +284,7 @@ export default function DeliverablesTab({ selectedClientId }) {
     }
 
     setErr("");
-    setBusy(true);
+    setApproving(true);
     try {
       await approveDeliverables(selectedClientId, selectedMeetingId);
       await refreshMeetings({ preserveSelection: true });
@@ -288,7 +292,7 @@ export default function DeliverablesTab({ selectedClientId }) {
     } catch (e) {
       setErr(e.message || "Failed to approve spec sheet/code tempalte");
     } finally {
-      setBusy(false);
+      setApproving(false);
     }
   }
 
@@ -512,7 +516,7 @@ export default function DeliverablesTab({ selectedClientId }) {
                     disabled={!canGenerate || busy}
                     title={tasksStatus !== "APPROVED" ? "Approve tasks first." : ""}
                   >
-                    {busy ? "Working..." : "Generate spec sheets and code templates"}
+                    {generating ? "Working..." : "Generate spec sheets and code templates"}
                   </button>
 
                   <button
@@ -521,7 +525,7 @@ export default function DeliverablesTab({ selectedClientId }) {
                     disabled={busy || !selectedMeetingId || !hasDeliverables}
                     title={!hasDeliverables ? "Generate deliverables first." : ""}
                   >
-                    {busy ? "Working..." : "Approve deliverables"}
+                    {approving ? "Working..." : "Approve deliverables"}
                   </button>
                 </div>
 
@@ -549,7 +553,7 @@ export default function DeliverablesTab({ selectedClientId }) {
                       onClick={onReviseWithAI}
                       disabled={busy || tasksStatus !== "APPROVED" || !aiInstructions.trim()}
                     >
-                      {busy ? "Working..." : "Revise with AI"}
+                      {revising ? "Working..." : "Revise with AI"}
                     </button>
                     <div style={{ fontSize: 13, opacity: 0.85, alignSelf: "center" }}>
                       If you edited locally, save drafts before revising with AI.
