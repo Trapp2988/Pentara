@@ -107,11 +107,6 @@ function normalizeTasks(tasks) {
   }));
 }
 
-function normalizeQuestions(qs) {
-  if (!Array.isArray(qs)) return [];
-  return qs.map((q) => (q ?? "").toString());
-}
-
 function deepEqualJson(a, b) {
   try {
     return JSON.stringify(a) === JSON.stringify(b);
@@ -166,11 +161,10 @@ export default function TasksTab({ selectedClientId }) {
 
   // Editable draft state
   const [draftTasks, setDraftTasks] = useState([]);
-  const [draftQuestions, setDraftQuestions] = useState([]);
   const [aiInstructions, setAiInstructions] = useState("");
 
   // Track the last-loaded server version to detect unsaved edits
-  const baselineRef = useRef({ tasks: [], research_questions: [] });
+  const baselineRef = useRef({ tasks: [] });
 
   const selectedMeeting = useMemo(() => {
     return meetings.find((m) => m.meeting_id === selectedMeetingId) || null;
@@ -196,21 +190,13 @@ export default function TasksTab({ selectedClientId }) {
 
   const dirty = useMemo(() => {
     const base = baselineRef.current;
-    return (
-      !deepEqualJson(draftTasks, base.tasks) ||
-      !deepEqualJson(draftQuestions, base.research_questions)
-    );
+    return !deepEqualJson(draftTasks, base.tasks);
   }, [draftTasks, draftQuestions]);
 
   function loadDraftFromMeeting(meeting) {
     const serverTasks = normalizeTasks(meeting?.tasks || []);
-    const serverQs = normalizeQuestions(meeting?.research_questions || []);
-    baselineRef.current = {
-      tasks: serverTasks,
-      research_questions: serverQs,
-    };
+    baselineRef.current = {tasks: serverTasks};
     setDraftTasks(serverTasks);
-    setDraftQuestions(serverQs);
     setAiInstructions(meeting?.last_instructions || "");
   }
 
@@ -220,8 +206,7 @@ export default function TasksTab({ selectedClientId }) {
       setMeetings([]);
       setSelectedMeetingId("");
       setDraftTasks([]);
-      setDraftQuestions([]);
-      baselineRef.current = { tasks: [], research_questions: [] };
+      baselineRef.current = { tasks: []};
       return;
     }
 
@@ -235,8 +220,7 @@ export default function TasksTab({ selectedClientId }) {
       if (!preserveSelection) {
         setSelectedMeetingId("");
         setDraftTasks([]);
-        setDraftQuestions([]);
-        baselineRef.current = { tasks: [], research_questions: [] };
+        baselineRef.current = { tasks: [] };
         return;
       }
 
@@ -334,7 +318,6 @@ export default function TasksTab({ selectedClientId }) {
 
       await saveTasks(selectedClientId, selectedMeetingId, {
         tasks: cleanedTasks,
-        research_questions: cleanedQs,
       });
 
       await refreshMeetings({ preserveSelection: true });
@@ -392,22 +375,6 @@ export default function TasksTab({ selectedClientId }) {
     setDraftTasks((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  function updateQuestion(idx, value) {
-    setDraftQuestions((prev) => {
-      const next = [...prev];
-      next[idx] = value;
-      return next;
-    });
-  }
-
-  function addQuestion() {
-    setDraftQuestions((prev) => [...prev, ""]);
-  }
-
-  function removeQuestion(idx) {
-    setDraftQuestions((prev) => prev.filter((_, i) => i !== idx));
-  }
-
   function resetDraftToServer() {
     if (!selectedMeeting) return;
     loadDraftFromMeeting(selectedMeeting);
@@ -415,7 +382,7 @@ export default function TasksTab({ selectedClientId }) {
 
   return (
     <div style={{ marginTop: 6 }}>
-      <h2 style={{ margin: "10px 0" }}>Tasks & Research Questions</h2>
+      <h2 style={{ margin: "10px 0" }}>Tasks</h2>
 
       {!selectedClientId ? (
         <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
@@ -428,8 +395,8 @@ export default function TasksTab({ selectedClientId }) {
             <strong>Instructions</strong>
             <ol>
               <li>Select a meeting with a completed transcript.</li>
-              <li>Click Generate tasks & questions.</li>
-              <li>Review/edit tasks and research questions.</li>
+              <li>Click Generate tasks.</li>
+              <li>Review/edit tasks.</li>
               <li>Approve tasks to unlock deliverables (spec sheets + code templates).</li>
             </ol>
           </div>
@@ -548,7 +515,7 @@ export default function TasksTab({ selectedClientId }) {
                         : ""
                     }
                   >
-                    {generating ? "Generating..." : "Generate tasks & questions"}
+                    {generating ? "Generating..." : "Generate tasks"}
                   </button>
 
                   <button
@@ -570,7 +537,7 @@ export default function TasksTab({ selectedClientId }) {
                 {/* If no outputs yet */}
                 {!hasServerOutputs ? (
                   <div style={{ marginTop: 10, opacity: 0.85 }}>
-                    No tasks/questions stored yet. If transcript is READY, click “Generate”.
+                    No tasks stored yet. If transcript is READY, click “Generate”.
                   </div>
                 ) : (
                   <>
@@ -580,7 +547,7 @@ export default function TasksTab({ selectedClientId }) {
                       <textarea
                         value={aiInstructions}
                         onChange={(e) => setAiInstructions(e.target.value)}
-                        placeholder="Example: Make the tasks more specific, add assumptions where needed, and convert research questions into measurable hypotheses."
+                        placeholder="Example: Make the tasks more specific and add assumptions where needed."
                         rows={4}
                         style={{
                           width: "100%",
@@ -678,7 +645,7 @@ export default function TasksTab({ selectedClientId }) {
                                     onChange={(e) => updateTask(idx, { description: e.target.value })}
                                     placeholder="Task description"
                                     rows={3}
-                                    style={{
+                                    style={
                                       width: "100%",
                                       padding: 10,
                                       border: "1px solid #ddd",
@@ -689,64 +656,6 @@ export default function TasksTab({ selectedClientId }) {
                                   />
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Editable Research Questions */}
-                    <div style={{ marginTop: 18 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <h3 style={{ margin: 0 }}>Research Questions (editable)</h3>
-                        <button type="button" onClick={addQuestion} disabled={saving || revising}>
-                          + Add question
-                        </button>
-                      </div>
-
-                      {draftQuestions.length === 0 ? (
-                        <div style={{ marginTop: 8, opacity: 0.85 }}>
-                          No research questions in draft. Add one, or revise with AI.
-                        </div>
-                      ) : (
-                        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-                          {draftQuestions.map((q, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                border: "1px solid #eee",
-                                borderRadius: 10,
-                                padding: 12,
-                                background: "#fafafa",
-                                display: "grid",
-                                gap: 8,
-                              }}
-                            >
-                              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                                <div style={{ fontWeight: 800 }}>Question {idx + 1}</div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeQuestion(idx)}
-                                  className="btnSecondary"
-                                  disabled={saving || revising}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-
-                              <input
-                                value={q}
-                                onChange={(e) => updateQuestion(idx, e.target.value)}
-                                placeholder="Research question"
-                                disabled={saving || revising}
-                              />
                             </div>
                           ))}
                         </div>
