@@ -1,5 +1,9 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
+function friendlyServiceUnavailableMessage() {
+  return "Still processing. Please wait 10–20 seconds, then click Refresh (avoid repeated clicks).";
+}
+
 async function request(path, options = {}) {
   if (!API_BASE) throw new Error("Missing VITE_API_BASE_URL");
 
@@ -16,13 +20,27 @@ async function request(path, options = {}) {
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    // ignore
+    // ignore non-JSON bodies
   }
 
   if (!res.ok) {
-    const msg = data?.error || data?.message || `Request failed (${res.status})`;
+    const rawMsg = (data?.error || data?.message || text || "").toString().trim();
+
+    // Friendly handling for API Gateway / Lambda transient 503s
+    const isSvcUnavailable =
+      res.status === 503 ||
+      rawMsg === "Service Unavailable" ||
+      rawMsg === '{"message":"Service Unavailable"}' ||
+      rawMsg.toLowerCase().includes("service unavailable");
+
+    if (isSvcUnavailable) {
+      throw new Error(friendlyServiceUnavailableMessage());
+    }
+
+    const msg = rawMsg || `Request failed (${res.status})`;
     throw new Error(msg);
   }
+
   return data;
 }
 
@@ -55,7 +73,7 @@ export async function approveDeliverables(clientId, meetingId) {
 }
 
 /**
- * NEW: Load the actual S3 file contents for a task (spec + template).
+ * Load the actual S3 file contents for a task (spec + template).
  * GET /deliverables-content?task_index=1&language=R
  */
 export async function fetchDeliverableContent(clientId, meetingId, taskIndex, language) {
@@ -75,7 +93,7 @@ export async function fetchDeliverableContent(clientId, meetingId, taskIndex, la
 }
 
 /**
- * NEW: Save user edits back to S3 (spec + template).
+ * Save user edits back to S3 (spec + template).
  * PUT /deliverables-content
  */
 export async function saveDeliverableContent(clientId, meetingId, payload) {
