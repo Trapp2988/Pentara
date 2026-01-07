@@ -4,11 +4,10 @@ import {
   approveDeliverables,
   clearDeliverables,
   fetchDeliverables,
-  fetchDeliverableContent,
+  fetchDeliverablesContent,
   generateDeliverables,
-  reviseDeliverables,
-  saveDeliverableContent,
-} from "../api/deliverablesApi";
+  saveDeliverablesContent,
+} from "../api/meetingsApi";
 
 function withMeetingNumbers(meetings) {
   // Stable numbering: oldest meeting = #1, newest = #N
@@ -137,14 +136,15 @@ export default function DeliverablesTab({ selectedClientId }) {
 
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [revising, setRevising] = useState(false);
   const [approving, setApproving] = useState(false);
   const [clearing, setClearing] = useState(false);
 
-  const busy = generating || revising || approving || clearing;
+  const busy = generating || approving || clearing;
   const [err, setErr] = useState("");
 
   const [language, setLanguage] = useState("R"); // used for "Generate" only (R|SAS|BOTH)
+
+  // Kept in UI (disabled) for later wiring if you add a revise endpoint again
   const [aiInstructions, setAiInstructions] = useState("");
 
   // Per-task loaded content + drafts
@@ -167,12 +167,6 @@ export default function DeliverablesTab({ selectedClientId }) {
     !!selectedMeetingId &&
     tasksStatus === "APPROVED" &&
     !hasDeliverables;
-
-  const canRevise =
-    !!selectedClientId &&
-    !!selectedMeetingId &&
-    tasksStatus === "APPROVED" &&
-    ["GENERATED", "REVISED", "APPROVED", "EDITED"].includes(deliverablesStatus);
 
   async function refreshMeetings({ preserveSelection = true } = {}) {
     const cid = (selectedClientId || "").trim();
@@ -237,6 +231,32 @@ export default function DeliverablesTab({ selectedClientId }) {
     }
   }
 
+  async function pollUntilDeliverablesReady(
+    meetingId,
+    { timeoutMs = 120000, intervalMs = 2500 } = {}
+  ) {
+    const cid = (selectedClientId || "").trim();
+    if (!cid || !meetingId) return;
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const list = await fetchMeetings(cid);
+      setMeetings(withMeetingNumbers(list));
+
+      const m = list.find((x) => x.meeting_id === meetingId);
+      const status = String(m?.deliverables_status || "NONE").toUpperCase();
+
+      if (["GENERATED", "REVISED", "EDITED", "APPROVED"].includes(status)) return;
+      if (["FAILED", "ERROR"].includes(status)) {
+        throw new Error("Deliverables generation failed. Check your Lambda/worker logs.");
+      }
+
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+
+    throw new Error("Timed out waiting for deliverables generation to finish.");
+  }
+
   useEffect(() => {
     refreshMeetings({ preserveSelection: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -268,8 +288,12 @@ export default function DeliverablesTab({ selectedClientId }) {
     setErr("");
     setGenerating(true);
     try {
+      // Kicks off async generation (queue/worker)
       await generateDeliverables(selectedClientId, selectedMeetingId, language);
-      await refreshMeetings({ preserveSelection: true });
+
+      // Poll until worker finishes and meeting reflects generated deliverables
+      await pollUntilDeliverablesReady(selectedMeetingId);
+
       await hydrateDeliverablesIntoMeeting(selectedMeetingId);
       setTaskDrafts({});
     } catch (e) {
@@ -305,37 +329,6 @@ export default function DeliverablesTab({ selectedClientId }) {
       setErr(e?.message || "Failed to clear generation");
     } finally {
       setClearing(false);
-    }
-  }
-
-  async function onReviseWithAI() {
-    if (!canRevise) return;
-
-    const ins = (aiInstructions || "").trim();
-    if (!ins) {
-      setErr("Please enter instructions for the AI (what to change).");
-      return;
-    }
-
-    const hasDirty = Object.values(taskDrafts).some((d) => d?.dirty);
-    if (hasDirty) {
-      const ok = window.confirm(
-        "You have unsaved edits. Revise with AI will overwrite S3 spec sheet/code template using the saved versions. Save drafts first if you want to keep them. Continue?"
-      );
-      if (!ok) return;
-    }
-
-    setErr("");
-    setRevising(true);
-    try {
-      await reviseDeliverables(selectedClientId, selectedMeetingId, ins);
-      await refreshMeetings({ preserveSelection: true });
-      await hydrateDeliverablesIntoMeeting(selectedMeetingId);
-      setTaskDrafts({});
-    } catch (e) {
-      setErr(e?.message || "Failed to revise spec sheet/code template");
-    } finally {
-      setRevising(false);
     }
   }
 
@@ -377,7 +370,7 @@ export default function DeliverablesTab({ selectedClientId }) {
 
     setErr("");
     try {
-      const d = await fetchDeliverableContent(
+      const d = await fetchDeliverablesContent(
         selectedClientId,
         selectedMeetingId,
         taskIndex,
@@ -442,12 +435,14 @@ export default function DeliverablesTab({ selectedClientId }) {
     }));
 
     try {
-      await saveDeliverableContent(selectedClientId, selectedMeetingId, {
-        task_index: taskIndex,
-        language: String(templateLang || "R").toUpperCase(),
-        spec_content: cur.spec ?? "",
-        template_content: cur.template ?? "",
-      });
+      await saveDeliverablesContent(
+        selectedClientId,
+        selectedMeetingId,
+        taskIndex,
+        String(templateLang || "R").toUpperCase(),
+        cur.spec ?? "",
+        cur.template ?? ""
+      );
 
       setTaskDrafts((prev) => ({
         ...prev,
@@ -466,7 +461,7 @@ export default function DeliverablesTab({ selectedClientId }) {
   }
 
   function defaultTemplateLangForMeeting() {
-    // If deliverables_language is BOTH, default to R in UI (user can switch per task)
+    // If deliverables_language is BOTH, default to R in UI (extend later if you want per-task switching)
     if (deliverablesLanguage === "SAS") return "SAS";
     return "R";
   }
@@ -561,10 +556,10 @@ export default function DeliverablesTab({ selectedClientId }) {
                     <strong>Deliverables:</strong>{" "}
                     {deliverablesStatus === "APPROVED"
                       ? pill(deliverablesStatus, "good")
-                      : deliverablesStatus === "GENERATED" ||
-                        deliverablesStatus === "REVISED" ||
-                        deliverablesStatus === "EDITED"
+                      : ["GENERATED", "REVISED", "EDITED"].includes(deliverablesStatus)
                       ? pill(deliverablesStatus, "info")
+                      : deliverablesStatus === "QUEUED" || deliverablesStatus === "RUNNING"
+                      ? pill(deliverablesStatus, "warn")
                       : pill(deliverablesStatus, "neutral")}
                   </div>
                   <div style={{ opacity: 0.85 }}>
@@ -624,14 +619,14 @@ export default function DeliverablesTab({ selectedClientId }) {
                   </button>
                 </div>
 
-                {/* AI revision prompt */}
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontWeight: 800, marginBottom: 6 }}>AI revision prompt</div>
+                {/* AI revision prompt (disabled until backend revise endpoint exists) */}
+                <div style={{ marginTop: 12, opacity: 0.7 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 6 }}>AI revision prompt (not wired)</div>
                   <textarea
                     value={aiInstructions}
                     onChange={(e) => setAiInstructions(e.target.value)}
-                    placeholder="Example: Add QC checks section to each spec. Keep templates as TODO/comment skeletons only."
-                    rows={4}
+                    placeholder="(Optional) If you add a revise endpoint later, this prompt can drive revisions."
+                    rows={3}
                     style={{
                       width: "100%",
                       padding: 10,
@@ -639,20 +634,10 @@ export default function DeliverablesTab({ selectedClientId }) {
                       borderRadius: 8,
                       resize: "vertical",
                     }}
-                    disabled={busy || tasksStatus !== "APPROVED"}
+                    disabled
                   />
-
-                  <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={onReviseWithAI}
-                      disabled={busy || tasksStatus !== "APPROVED" || !aiInstructions.trim()}
-                    >
-                      {revising ? "Revising..." : "Revise with AI"}
-                    </button>
-                    <div style={{ fontSize: 13, opacity: 0.85, alignSelf: "center" }}>
-                      If you edited locally, save drafts before revising with AI.
-                    </div>
+                  <div style={{ fontSize: 13, marginTop: 6 }}>
+                    To revise with AI, add a backend endpoint (e.g. POST /revise-deliverables) and wire it here.
                   </div>
                 </div>
 
@@ -698,17 +683,8 @@ export default function DeliverablesTab({ selectedClientId }) {
 
                               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                                 {deliverablesLanguage === "BOTH" ? (
-                                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                    <span style={{ fontSize: 13, opacity: 0.85 }}>Template</span>
-                                    <select
-                                      value={defaultLang}
-                                      disabled
-                                      style={{ padding: 8 }}
-                                      title="For BOTH language meetings, this UI defaults to R. You can extend this to allow per-task switching."
-                                    >
-                                      <option value="R">R</option>
-                                      <option value="SAS">SAS</option>
-                                    </select>
+                                  <div style={{ fontSize: 13, opacity: 0.85 }} title="UI currently defaults to R for BOTH. Extend later if you want per-task language switching.">
+                                    BOTH → editing default: <strong>{defaultLang}</strong>
                                   </div>
                                 ) : null}
 
@@ -821,3 +797,5 @@ export default function DeliverablesTab({ selectedClientId }) {
     </div>
   );
 }
+
+ 
