@@ -33,20 +33,28 @@ function meetingDateLabelFromIso(iso) {
   if (!iso) return null;
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
-
 
 function meetingDateLabel(meetingId) {
   // Expected: YYYYMMDDTHHMMSSZ-xxxxxxxx
-  const m = String(meetingId || "").match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z-/);
+  const m = String(meetingId || "").match(
+    /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z-/
+  );
   if (!m) return null;
 
   const [_, yyyy, MM, dd, HH, mm, ss] = m;
   const dt = new Date(Date.UTC(+yyyy, +MM - 1, +dd, +HH, +mm, +ss));
 
-  // Option 1: date only
-  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return dt.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function shortMeetingId(meetingId) {
@@ -57,31 +65,31 @@ function shortMeetingId(meetingId) {
   return tail && tail.length <= 12 ? tail : s.slice(-8);
 }
 
+// (Not used currently, but leaving as-is in case you wire it later.)
 function meetingLabel(m) {
   if (!m) return "";
   const date = meetingDateLabel(m.meeting_id) || m.meeting_id;
   const shortId = shortMeetingId(m.meeting_id);
-
-  // Customize the right-hand “status” text per tab (examples below)
   return { date, shortId };
 }
 
-
 function formatMeetingDisplay(meeting) {
-  // Option 1: "Jan 5, 2026 • Client Kickoff" (falls back if no label)
   const d = new Date(meeting.created_at || meeting.updated_at || "");
   const dateStr = isNaN(d.getTime())
     ? ""
-    : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    : d.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
 
   const label = (meeting.meeting_label || "").trim();
 
   if (dateStr && label) return `${dateStr} • ${label}`;
-  if (dateStr) return dateStr;              // fallback: just date
-  if (label) return label;                  // fallback: just label
-  return meeting.meeting_id;                // final fallback
+  if (dateStr) return dateStr;
+  if (label) return label;
+  return meeting.meeting_id;
 }
-
 
 function fmtDate(iso) {
   if (!iso) return "";
@@ -131,7 +139,9 @@ export default function DeliverablesTab({ selectedClientId }) {
   const [generating, setGenerating] = useState(false);
   const [revising, setRevising] = useState(false);
   const [approving, setApproving] = useState(false);
-  
+  const [clearing, setClearing] = useState(false);
+
+  const busy = generating || revising || approving || clearing;
   const [err, setErr] = useState("");
 
   const [language, setLanguage] = useState("R"); // used for "Generate" only (R|SAS|BOTH)
@@ -141,12 +151,12 @@ export default function DeliverablesTab({ selectedClientId }) {
   // { "1::R": { loaded: true, loading: false, spec: "...", template: "...", dirty: false, lastLoadedAt: iso } }
   const [taskDrafts, setTaskDrafts] = useState({});
 
-  const [clearing, setClearing] = useState(false);
-  const busy = generating || revising || approving || clearing;
-
   const selectedMeeting = useMemo(() => {
     return meetings.find((m) => m.meeting_id === selectedMeetingId) || null;
   }, [meetings, selectedMeetingId]);
+
+  const specIndex = selectedMeeting?.spec_sheets || [];
+  const hasDeliverables = specIndex.length > 0;
 
   const tasksStatus = (selectedMeeting?.tasks_status || "NONE").toUpperCase();
   const deliverablesStatus = (selectedMeeting?.deliverables_status || "NONE").toUpperCase();
@@ -163,9 +173,6 @@ export default function DeliverablesTab({ selectedClientId }) {
     !!selectedMeetingId &&
     tasksStatus === "APPROVED" &&
     ["GENERATED", "REVISED", "APPROVED", "EDITED"].includes(deliverablesStatus);
-
-  const specIndex = selectedMeeting?.spec_sheets || [];
-  const hasDeliverables = specIndex.length > 0;
 
   async function refreshMeetings({ preserveSelection = true } = {}) {
     const cid = (selectedClientId || "").trim();
@@ -196,7 +203,7 @@ export default function DeliverablesTab({ selectedClientId }) {
         setTaskDrafts({});
       }
     } catch (e) {
-      setErr(e.message || "Failed to load meetings");
+      setErr(e?.message || "Failed to load meetings");
       setMeetings([]);
       setSelectedMeetingId("");
       setTaskDrafts({});
@@ -241,7 +248,6 @@ export default function DeliverablesTab({ selectedClientId }) {
   }, [selectedMeetingId]);
 
   async function onChangeMeeting(nextId) {
-    // block if there are unsaved drafts
     const hasDirty = Object.values(taskDrafts).some((d) => d?.dirty);
     if (hasDirty) {
       const ok = window.confirm(
@@ -267,7 +273,7 @@ export default function DeliverablesTab({ selectedClientId }) {
       await hydrateDeliverablesIntoMeeting(selectedMeetingId);
       setTaskDrafts({});
     } catch (e) {
-      setErr(e.message || "Failed to generate spec sheet/code template");
+      setErr(e?.message || "Failed to generate spec sheet/code template");
     } finally {
       setGenerating(false);
     }
@@ -275,18 +281,18 @@ export default function DeliverablesTab({ selectedClientId }) {
 
   async function onClearGeneration() {
     if (!selectedClientId || !selectedMeetingId) return;
-  
+
     const hasDirty = Object.values(taskDrafts).some((d) => d?.dirty);
     if (hasDirty) {
       setErr("You have unsaved edits. Save drafts before clearing generation.");
       return;
     }
-  
+
     const ok = window.confirm(
       "Clear generated spec sheets and code templates for this meeting? This deletes the generated files in S3 so you can regenerate from updated tasks."
     );
     if (!ok) return;
-  
+
     setErr("");
     setClearing(true);
     try {
@@ -296,12 +302,11 @@ export default function DeliverablesTab({ selectedClientId }) {
       setTaskDrafts({});
       setAiInstructions("");
     } catch (e) {
-      setErr(e.message || "Failed to clear generation");
+      setErr(e?.message || "Failed to clear generation");
     } finally {
       setClearing(false);
     }
   }
-
 
   async function onReviseWithAI() {
     if (!canRevise) return;
@@ -328,7 +333,7 @@ export default function DeliverablesTab({ selectedClientId }) {
       await hydrateDeliverablesIntoMeeting(selectedMeetingId);
       setTaskDrafts({});
     } catch (e) {
-      setErr(e.message || "Failed to revise spec sheet/code template");
+      setErr(e?.message || "Failed to revise spec sheet/code template");
     } finally {
       setRevising(false);
     }
@@ -355,7 +360,7 @@ export default function DeliverablesTab({ selectedClientId }) {
       await refreshMeetings({ preserveSelection: true });
       await hydrateDeliverablesIntoMeeting(selectedMeetingId);
     } catch (e) {
-      setErr(e.message || "Failed to approve spec sheet/code tempalte");
+      setErr(e?.message || "Failed to approve spec sheet/code template");
     } finally {
       setApproving(false);
     }
@@ -393,7 +398,7 @@ export default function DeliverablesTab({ selectedClientId }) {
         },
       }));
     } catch (e) {
-      setErr(e.message || "Failed to load task spec sheet/code template");
+      setErr(e?.message || "Failed to load task spec sheet/code template");
       setTaskDrafts((prev) => ({
         ...prev,
         [key]: { ...(prev[key] || {}), loading: false },
@@ -404,7 +409,14 @@ export default function DeliverablesTab({ selectedClientId }) {
   function updateDraft(taskIndex, templateLang, patch) {
     const key = taskKey(taskIndex, templateLang);
     setTaskDrafts((prev) => {
-      const cur = prev[key] || { loaded: true, loading: false, spec: "", template: "", dirty: false };
+      const cur =
+        prev[key] || {
+          loaded: true,
+          loading: false,
+          spec: "",
+          template: "",
+          dirty: false,
+        };
       return {
         ...prev,
         [key]: {
@@ -437,7 +449,6 @@ export default function DeliverablesTab({ selectedClientId }) {
         template_content: cur.template ?? "",
       });
 
-      // mark clean + refresh top-level meeting metadata
       setTaskDrafts((prev) => ({
         ...prev,
         [key]: { ...prev[key], saving: false, dirty: false },
@@ -446,7 +457,7 @@ export default function DeliverablesTab({ selectedClientId }) {
       await refreshMeetings({ preserveSelection: true });
       await hydrateDeliverablesIntoMeeting(selectedMeetingId);
     } catch (e) {
-      setErr(e.message || "Failed to save deliverable edits");
+      setErr(e?.message || "Failed to save deliverable edits");
       setTaskDrafts((prev) => ({
         ...prev,
         [key]: { ...prev[key], saving: false },
@@ -462,7 +473,7 @@ export default function DeliverablesTab({ selectedClientId }) {
 
   return (
     <div style={{ marginTop: 6 }}>
-      <h2 style={{ margin: "10px 0" }}>Spec Sheet & Code Template</h2>
+      <h2 style={{ margin: "10px 0" }}>Spec Sheet &amp; Code Template</h2>
 
       {!selectedClientId ? (
         <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
@@ -470,17 +481,18 @@ export default function DeliverablesTab({ selectedClientId }) {
         </div>
       ) : (
         <>
-           {/* Instructions (top of Deliverables tab) */}
-            <div className="instructionsBox">
-              <strong>Instructions</strong>
-              <ol>
-                <li>Tasks must be approved before generating spec sheet/code template.</li>
-                <li>Select the programming language (R or SAS).</li>
-                <li>Generate spec sheets and code templates for each task.</li>
-                <li>Edit spec sheet/code template directly in the app if needed.</li>
-                <li>Approve spec sheet/code template when finalized.</li>
-              </ol>
-            </div>
+          {/* Instructions (top of Deliverables tab) */}
+          <div className="instructionsBox">
+            <strong>Instructions</strong>
+            <ol>
+              <li>Tasks must be approved before generating spec sheet/code template.</li>
+              <li>Select the programming language (R or SAS).</li>
+              <li>Generate spec sheets and code templates for each task.</li>
+              <li>Edit spec sheet/code template directly in the app if needed.</li>
+              <li>Approve spec sheet/code template when finalized.</li>
+            </ol>
+          </div>
+
           <div
             style={{
               display: "flex",
@@ -505,9 +517,12 @@ export default function DeliverablesTab({ selectedClientId }) {
               ) : null}
 
               {meetings.map((m) => {
-                const dateLabel = meetingDateLabel(m.meeting_id) || meetingDateLabelFromIso(m.created_at || m.updated_at) || "Meeting";
+                const dateLabel =
+                  meetingDateLabel(m.meeting_id) ||
+                  meetingDateLabelFromIso(m.created_at || m.updated_at) ||
+                  "Meeting";
                 const n = m.meeting_number || "?";
-                
+
                 return (
                   <option key={m.meeting_id} value={m.meeting_id}>
                     {dateLabel} • meeting #{n} — tasks {String(m.tasks_status || "NONE")}
@@ -534,8 +549,7 @@ export default function DeliverablesTab({ selectedClientId }) {
             >
               <div style={{ display: "grid", gap: 6 }}>
                 <div>
-                  <strong>Meeting:</strong>{" "}
-                  {formatMeetingDisplay(selectedMeeting)}
+                  <strong>Meeting:</strong> {formatMeetingDisplay(selectedMeeting)}
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -567,8 +581,9 @@ export default function DeliverablesTab({ selectedClientId }) {
                   <select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
-                    disabled={busy || tasksStatus !== "APPROVED"}
+                    disabled={busy || tasksStatus !== "APPROVED" || hasDeliverables}
                     style={{ padding: 10, minWidth: 220 }}
+                    title={hasDeliverables ? "Clear generation before generating again." : ""}
                   >
                     <option value="R">R</option>
                     <option value="SAS">SAS</option>
@@ -579,7 +594,13 @@ export default function DeliverablesTab({ selectedClientId }) {
                     type="button"
                     onClick={onGenerate}
                     disabled={!canGenerate || busy}
-                    title={tasksStatus !== "APPROVED" ? "Approve tasks first." : ""}
+                    title={
+                      tasksStatus !== "APPROVED"
+                        ? "Approve tasks first."
+                        : hasDeliverables
+                        ? "Clear generation before generating again."
+                        : ""
+                    }
                   >
                     {generating ? "Generating..." : "Generate spec sheets and code templates"}
                   </button>
@@ -592,14 +613,14 @@ export default function DeliverablesTab({ selectedClientId }) {
                   >
                     {clearing ? "Clearing..." : "Clear generation"}
                   </button>
-                  
+
                   <button
                     type="button"
                     onClick={onApprove}
                     disabled={busy || !selectedMeetingId || !hasDeliverables}
                     title={!hasDeliverables ? "Generate deliverables first." : ""}
                   >
-                    {approving ? "Apporving..." : "Approve deliverables"}
+                    {approving ? "Approving..." : "Approve deliverables"}
                   </button>
                 </div>
 
@@ -740,7 +761,8 @@ export default function DeliverablesTab({ selectedClientId }) {
                                       border: "1px solid #ddd",
                                       borderRadius: 10,
                                       resize: "vertical",
-                                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                                      fontFamily:
+                                        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
                                       background: "#fff",
                                     }}
                                     disabled={draft?.saving}
@@ -762,7 +784,8 @@ export default function DeliverablesTab({ selectedClientId }) {
                                       border: "1px solid #ddd",
                                       borderRadius: 10,
                                       resize: "vertical",
-                                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                                      fontFamily:
+                                        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
                                       background: "#fff",
                                     }}
                                     disabled={draft?.saving}
