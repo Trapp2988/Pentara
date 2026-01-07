@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { fetchMeetings } from "../api/meetingsApi";
 import {
   approveDeliverables,
+  clearDeliverables,
   fetchDeliverables,
   fetchDeliverableContent,
   generateDeliverables,
@@ -27,6 +28,14 @@ function withMeetingNumbers(meetings) {
     meeting_number: idToNumber.get(m.meeting_id),
   }));
 }
+
+function meetingDateLabelFromIso(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 
 function meetingDateLabel(meetingId) {
   // Expected: YYYYMMDDTHHMMSSZ-xxxxxxxx
@@ -123,7 +132,6 @@ export default function DeliverablesTab({ selectedClientId }) {
   const [revising, setRevising] = useState(false);
   const [approving, setApproving] = useState(false);
   
-  const busy = generating || revising || approving;
   const [err, setErr] = useState("");
 
   const [language, setLanguage] = useState("R"); // used for "Generate" only (R|SAS|BOTH)
@@ -133,6 +141,9 @@ export default function DeliverablesTab({ selectedClientId }) {
   // { "1::R": { loaded: true, loading: false, spec: "...", template: "...", dirty: false, lastLoadedAt: iso } }
   const [taskDrafts, setTaskDrafts] = useState({});
 
+  const [clearing, setClearing] = useState(false);
+  const busy = generating || revising || approving || clearing;
+
   const selectedMeeting = useMemo(() => {
     return meetings.find((m) => m.meeting_id === selectedMeetingId) || null;
   }, [meetings, selectedMeetingId]);
@@ -141,7 +152,12 @@ export default function DeliverablesTab({ selectedClientId }) {
   const deliverablesStatus = (selectedMeeting?.deliverables_status || "NONE").toUpperCase();
   const deliverablesLanguage = (selectedMeeting?.deliverables_language || "").toUpperCase();
 
-  const canGenerate = !!selectedClientId && !!selectedMeetingId && tasksStatus === "APPROVED";
+  const canGenerate =
+    !!selectedClientId &&
+    !!selectedMeetingId &&
+    tasksStatus === "APPROVED" &&
+    !hasDeliverables;
+
   const canRevise =
     !!selectedClientId &&
     !!selectedMeetingId &&
@@ -256,6 +272,36 @@ export default function DeliverablesTab({ selectedClientId }) {
       setGenerating(false);
     }
   }
+
+  async function onClearGeneration() {
+    if (!selectedClientId || !selectedMeetingId) return;
+  
+    const hasDirty = Object.values(taskDrafts).some((d) => d?.dirty);
+    if (hasDirty) {
+      setErr("You have unsaved edits. Save drafts before clearing generation.");
+      return;
+    }
+  
+    const ok = window.confirm(
+      "Clear generated spec sheets and code templates for this meeting? This deletes the generated files in S3 so you can regenerate from updated tasks."
+    );
+    if (!ok) return;
+  
+    setErr("");
+    setClearing(true);
+    try {
+      await clearDeliverables(selectedClientId, selectedMeetingId);
+      await refreshMeetings({ preserveSelection: true });
+      await hydrateDeliverablesIntoMeeting(selectedMeetingId);
+      setTaskDrafts({});
+      setAiInstructions("");
+    } catch (e) {
+      setErr(e.message || "Failed to clear generation");
+    } finally {
+      setClearing(false);
+    }
+  }
+
 
   async function onReviseWithAI() {
     if (!canRevise) return;
@@ -535,16 +581,25 @@ export default function DeliverablesTab({ selectedClientId }) {
                     disabled={!canGenerate || busy}
                     title={tasksStatus !== "APPROVED" ? "Approve tasks first." : ""}
                   >
-                    {generating ? "Working..." : "Generate spec sheets and code templates"}
+                    {generating ? "Generating..." : "Generate spec sheets and code templates"}
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={onClearGeneration}
+                    disabled={busy || !selectedMeetingId || !hasDeliverables}
+                    title={!hasDeliverables ? "Nothing to clear yet." : ""}
+                  >
+                    {clearing ? "Clearing..." : "Clear generation"}
+                  </button>
+                  
                   <button
                     type="button"
                     onClick={onApprove}
                     disabled={busy || !selectedMeetingId || !hasDeliverables}
                     title={!hasDeliverables ? "Generate deliverables first." : ""}
                   >
-                    {approving ? "Working..." : "Approve deliverables"}
+                    {approving ? "Apporving..." : "Approve deliverables"}
                   </button>
                 </div>
 
@@ -572,7 +627,7 @@ export default function DeliverablesTab({ selectedClientId }) {
                       onClick={onReviseWithAI}
                       disabled={busy || tasksStatus !== "APPROVED" || !aiInstructions.trim()}
                     >
-                      {revising ? "Working..." : "Revise with AI"}
+                      {revising ? "Revising..." : "Revise with AI"}
                     </button>
                     <div style={{ fontSize: 13, opacity: 0.85, alignSelf: "center" }}>
                       If you edited locally, save drafts before revising with AI.
