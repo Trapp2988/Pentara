@@ -102,3 +102,10 @@ export async function saveDeliverableContent(clientId, meetingId, payload) {
     { method: "PUT", body: JSON.stringify(payload || {}) }
   );
 }
+
+export async function clearDeliverables(clientId, meetingId) {
+  return request(
+    `/clients/${encodeURIComponent(clientId)}/meetings/${encodeURIComponent(meetingId)}/clear-deliverables`,
+    { method: "POST" }
+  );
+}
