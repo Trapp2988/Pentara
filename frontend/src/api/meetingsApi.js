@@ -14,46 +14,19 @@ async function readJson(res) {
   return data || {};
 }
 
-export async function fetchMeetings(clientId) {
-  const cid = (clientId || "").trim();
-  if (!cid) throw new Error("clientId is required");
+async function request(path, { method = "GET", body } = {}) {
+  const opts = { method, headers: {} };
 
-  const res = await fetch(
-    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings`,
-    { method: "GET" }
-  );
-
-  const data = await readJson(res);
-  if (!res.ok) {
-    throw new Error(
-      data?.error || `GET /clients/${cid}/meetings failed (${res.status})`
-    );
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
   }
-  return data.meetings || [];
-}
 
-export async function generateTasks(clientId, meetingId) {
-  const cid = (clientId || "").trim();
-  const mid = (meetingId || "").trim();
-  if (!cid) throw new Error("clientId is required");
-  if (!mid) throw new Error("meetingId is required");
-
-  const res = await fetch(
-    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
-      mid
-    )}/generate-tasks`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    }
-  );
-
+  const res = await fetch(`${getBaseUrl()}${path}`, opts);
   const data = await readJson(res);
+
   if (!res.ok) {
-    const msg =
-      data?.error ||
-      `POST /clients/${cid}/meetings/${mid}/generate-tasks failed (${res.status})`;
+    const msg = data?.error || `${method} ${path} failed (${res.status})`;
     const extra = data?.transcript_status
       ? ` (transcript_status=${data.transcript_status})`
       : "";
@@ -61,6 +34,36 @@ export async function generateTasks(clientId, meetingId) {
   }
 
   return data;
+}
+
+// =======================
+// Meetings
+// =======================
+
+export async function fetchMeetings(clientId) {
+  const cid = (clientId || "").trim();
+  if (!cid) throw new Error("clientId is required");
+
+  const data = await request(`/clients/${encodeURIComponent(cid)}/meetings`, {
+    method: "GET",
+  });
+  return data.meetings || [];
+}
+
+// =======================
+// Tasks
+// =======================
+
+export async function generateTasks(clientId, meetingId) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/generate-tasks`,
+    { method: "POST", body: {} }
+  );
 }
 
 export async function reviseTasks(clientId, meetingId, instructions) {
@@ -71,55 +74,23 @@ export async function reviseTasks(clientId, meetingId, instructions) {
   if (!mid) throw new Error("meetingId is required");
   if (!ins) throw new Error("instructions is required");
 
-  const res = await fetch(
-    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
-      mid
-    )}/revise-tasks`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instructions: ins }),
-    }
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/revise-tasks`,
+    { method: "POST", body: { instructions: ins } }
   );
-
-  const data = await readJson(res);
-  if (!res.ok) {
-    const msg =
-      data?.error ||
-      `POST /clients/${cid}/meetings/${mid}/revise-tasks failed (${res.status})`;
-    const extra = data?.transcript_status
-      ? ` (transcript_status=${data.transcript_status})`
-      : "";
-    throw new Error(msg + extra);
-  }
-
-  return data;
 }
 
-export async function saveTasks(clientId, meetingId, payload) {
+export async function saveTasks(clientId, meetingId, tasks) {
   const cid = (clientId || "").trim();
   const mid = (meetingId || "").trim();
   if (!cid) throw new Error("clientId is required");
   if (!mid) throw new Error("meetingId is required");
+  if (!Array.isArray(tasks)) throw new Error("tasks must be an array");
 
-  const res = await fetch(
-    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
-      mid
-    )}/tasks`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload || {}),
-    }
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/tasks`,
+    { method: "PUT", body: { tasks } }
   );
-
-  const data = await readJson(res);
-  if (!res.ok) {
-    throw new Error(
-      data?.error || `PUT /clients/${cid}/meetings/${mid}/tasks failed (${res.status})`
-    );
-  }
-  return data;
 }
 
 export async function approveTasks(clientId, meetingId) {
@@ -128,20 +99,109 @@ export async function approveTasks(clientId, meetingId) {
   if (!cid) throw new Error("clientId is required");
   if (!mid) throw new Error("meetingId is required");
 
-  const res = await fetch(
-    `${getBaseUrl()}/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(
-      mid
-    )}/approve-tasks`,
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/approve-tasks`,
+    { method: "POST", body: {} }
+  );
+}
+
+// =======================
+// Deliverables (async)
+// =======================
+
+export async function fetchDeliverables(clientId, meetingId) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/deliverables`,
+    { method: "GET" }
+  );
+}
+
+export async function generateDeliverables(clientId, meetingId, language) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  const lang = (language || "R").trim().toUpperCase();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+
+  // backend expects: R | SAS | BOTH
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/generate-deliverables`,
+    { method: "POST", body: { language: lang } }
+  );
+}
+
+export async function fetchDeliverablesContent(clientId, meetingId, taskIndex, language) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  const ti = Number(taskIndex);
+  const lang = (language || "R").trim().toUpperCase();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+  if (!Number.isFinite(ti) || ti <= 0) throw new Error("taskIndex must be >= 1");
+
+  const qs = `task_index=${encodeURIComponent(String(ti))}&language=${encodeURIComponent(lang)}`;
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/deliverables-content?${qs}`,
+    { method: "GET" }
+  );
+}
+
+export async function saveDeliverablesContent(
+  clientId,
+  meetingId,
+  taskIndex,
+  language,
+  specContent,
+  templateContent
+) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  const ti = Number(taskIndex);
+  const lang = (language || "R").trim().toUpperCase();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+  if (!Number.isFinite(ti) || ti <= 0) throw new Error("taskIndex must be >= 1");
+
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/deliverables-content`,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      method: "PUT",
+      body: {
+        task_index: ti,
+        language: lang,
+        spec_content: specContent ?? "",
+        template_content: templateContent ?? "",
+      },
     }
   );
-
-  const data = await readJson(res);
-  if (!res.ok) {
-    throw new Error(data?.error || `POST /approve-tasks failed (${res.status})`);
-  }
-  return data;
 }
+
+export async function approveDeliverables(clientId, meetingId) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/approve-deliverables`,
+    { method: "POST", body: {} }
+  );
+}
+
+export async function clearDeliverables(clientId, meetingId) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/clear-deliverables`,
+    { method: "POST", body: {} }
+  );
+}
+
