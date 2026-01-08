@@ -105,6 +105,19 @@ export async function approveTasks(clientId, meetingId) {
   );
 }
 
+// NEW: Clear tasks
+export async function clearTasks(clientId, meetingId) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/clear-tasks`,
+    { method: "POST", body: {} }
+  );
+}
+
 // =======================
 // Deliverables (async)
 // =======================
