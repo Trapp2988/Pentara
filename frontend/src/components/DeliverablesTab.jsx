@@ -12,11 +12,18 @@ import {
 
 function withMeetingNumbers(meetings) {
   // Stable numbering: oldest meeting = #1, newest = #N
-  const sortedAsc = [...(meetings || [])].sort((a, b) => {
-    const ta = new Date(a.created_at || a.updated_at || 0).getTime();
-    const tb = new Date(b.created_at || b.updated_at || 0).getTime();
-    return ta - tb;
+    const sortedAsc = [...(meetings || [])].sort((a, b) => {
+    const ta = new Date(a.created_at || 0).getTime();
+    const tb = new Date(b.created_at || 0).getTime();
+
+    if (Number.isFinite(ta) && Number.isFinite(tb) && ta > 0 && tb > 0) return ta - tb;
+
+    // Fallback to meeting_id timestamp if created_at is missing/bad
+    const ida = String(a.meeting_id || "");
+    const idb = String(b.meeting_id || "");
+    return ida.localeCompare(idb);
   });
+
 
   const idToNumber = new Map();
   sortedAsc.forEach((m, idx) => {
