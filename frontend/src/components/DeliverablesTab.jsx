@@ -724,7 +724,8 @@ export default function DeliverablesTab({ selectedClientId }) {
                             style={{
                               border: "1px solid #eee",
                               borderRadius: 12,
-                              padding: 12,
+                              padding: 16,
+                              minHeight: 520,
                               background: "#fafafa",
                             }}
                           >
@@ -782,7 +783,8 @@ export default function DeliverablesTab({ selectedClientId }) {
                                   marginTop: 12,
                                   display: "grid",
                                   gridTemplateColumns: "1fr 1fr",
-                                  gap: 12,
+                                  gap: 16,
+                                  alignItems: "stretch",
                                 }}
                               >
                                 <div style={{ display: "grid", gap: 8 }}>
@@ -790,7 +792,7 @@ export default function DeliverablesTab({ selectedClientId }) {
                                   <textarea
                                     value={draft?.spec ?? ""}
                                     onChange={(e) => updateDraft(ti, defaultLang, { spec: e.target.value })}
-                                    rows={14}
+                                    rows={26}
                                     style={{
                                       width: "100%",
                                       padding: 10,
@@ -813,7 +815,7 @@ export default function DeliverablesTab({ selectedClientId }) {
                                   <textarea
                                     value={draft?.template ?? ""}
                                     onChange={(e) => updateDraft(ti, defaultLang, { template: e.target.value })}
-                                    rows={14}
+                                    rows={26}
                                     style={{
                                       width: "100%",
                                       padding: 10,
