@@ -218,3 +218,22 @@ export async function clearDeliverables(clientId, meetingId) {
   );
 }
 
+export async function reviseDeliverables(clientId, meetingId, taskIndex, language, instructions) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  const ti = Number(taskIndex);
+  const lang = (language || "R").trim().toUpperCase();
+  const ins = (instructions || "").trim();
+
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+  if (!Number.isFinite(ti) || ti <= 0) throw new Error("taskIndex must be >= 1");
+  if (!ins) throw new Error("instructions is required");
+
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/revise-deliverables`,
+    { method: "POST", body: { task_index: ti, language: lang, instructions: ins } }
+  );
+}
+
+
