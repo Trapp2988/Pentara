@@ -7,6 +7,7 @@ import {
   fetchDeliverablesContent,
   generateDeliverables,
   saveDeliverablesContent,
+  reviseDeliverables,
 } from "../api/meetingsApi";
 
 function withMeetingNumbers(meetings) {
@@ -138,8 +139,9 @@ export default function DeliverablesTab({ selectedClientId }) {
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [revising, setRevising] = useState(false);
 
-  const busy = generating || approving || clearing;
+  const busy = generating || approving || clearing || revising;
   const [err, setErr] = useState("");
 
   const [language, setLanguage] = useState("R"); // used for "Generate" only (R|SAS|BOTH)
@@ -230,6 +232,49 @@ export default function DeliverablesTab({ selectedClientId }) {
       // non-fatal
     }
   }
+
+  async function onReviseWithAI() {
+  if (!selectedClientId || !selectedMeetingId) return;
+
+  const ins = (aiInstructions || "").trim();
+  if (!ins) {
+    setErr("Enter AI revision instructions first.");
+    return;
+  }
+
+  // pick the first loaded task draft (simple v1)
+  const loadedKey = Object.keys(taskDrafts).find((k) => taskDrafts[k]?.loaded);
+  if (!loadedKey) {
+    setErr("Load a task first (click Load) so the app knows which deliverable to revise.");
+    return;
+  }
+
+  const [taskIndexStr, lang] = loadedKey.split("::");
+  const taskIndex = Number(taskIndexStr);
+
+  const cur = taskDrafts[loadedKey];
+  if (cur?.dirty) {
+    setErr("You have unsaved edits in the loaded task. Save draft before revising with AI.");
+    return;
+  }
+
+  setErr("");
+  setGenerating(true); // reuse busy spinner; or make a new revising state if you want
+  try {
+    await reviseDeliverables(selectedClientId, selectedMeetingId, taskIndex, lang, ins);
+
+    // reload content from S3 so UI shows the revised spec/template
+    await loadTask(taskIndex, lang);
+
+    await refreshMeetings({ preserveSelection: true });
+    await hydrateDeliverablesIntoMeeting(selectedMeetingId);
+  } catch (e) {
+    setErr(e?.message || "Failed to revise deliverables with AI");
+  } finally {
+    setGenerating(false);
+  }
+}
+
 
   async function pollUntilDeliverablesReady(
     meetingId,
@@ -620,13 +665,14 @@ export default function DeliverablesTab({ selectedClientId }) {
                   </button>
                 </div>
 
-                {/* AI revision prompt (disabled until backend revise endpoint exists) */}
-                <div style={{ marginTop: 12, opacity: 0.7 }}>
-                  <div style={{ fontWeight: 800, marginBottom: 6 }}>AI revision prompt (not wired)</div>
+                {/* AI revision prompt */}
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 6 }}>AI revision prompt</div>
+                
                   <textarea
                     value={aiInstructions}
                     onChange={(e) => setAiInstructions(e.target.value)}
-                    placeholder="(Optional) If you add a revise endpoint later, this prompt can drive revisions."
+                    placeholder="Example: tighten scope, add assumptions, and make outputs explicit. Keep it consistent with the transcript and tasks."
                     rows={3}
                     style={{
                       width: "100%",
@@ -635,12 +681,25 @@ export default function DeliverablesTab({ selectedClientId }) {
                       borderRadius: 8,
                       resize: "vertical",
                     }}
-                    disabled
+                    disabled={busy}
                   />
-                  <div style={{ fontSize: 13, marginTop: 6 }}>
-                    To revise with AI, add a backend endpoint (e.g. POST /revise-deliverables) and wire it here.
+                
+                  <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={onReviseWithAI}
+                      disabled={busy || !selectedMeetingId || !hasDeliverables || !aiInstructions.trim()}
+                      title={!hasDeliverables ? "Generate deliverables first." : ""}
+                    >
+                      {revising ? "Revising..." : "Revise deliverables with AI"}
+                    </button>
+                
+                    <div style={{ fontSize: 13, opacity: 0.85, alignSelf: "center" }}>
+                      Revising will update spec sheets + code templates (and mark deliverables as not approved).
+                    </div>
                   </div>
                 </div>
+
 
                 {/* Tasks list with inline editors */}
                 <div style={{ marginTop: 16 }}>
