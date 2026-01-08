@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState , useRef} from "react";
 import { fetchMeetings } from "../api/meetingsApi";
 import {
   approveDeliverables,
@@ -152,6 +152,8 @@ export default function DeliverablesTab({ selectedClientId }) {
   // Per-task loaded content + drafts
   // { "1::R": { loaded: true, loading: false, spec: "...", template: "...", dirty: false, lastLoadedAt: iso } }
   const [taskDrafts, setTaskDrafts] = useState({});
+
+  const lastAutoLoadedRef = useRef(""); // token to avoid repeated autoloads
 
   const selectedMeeting = useMemo(() => {
     return meetings.find((m) => m.meeting_id === selectedMeetingId) || null;
@@ -311,6 +313,24 @@ export default function DeliverablesTab({ selectedClientId }) {
     if (selectedMeetingId) hydrateDeliverablesIntoMeeting(selectedMeetingId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMeetingId]);
+
+  useEffect(() => {
+    // Only autoload when deliverables exist for this meeting
+    if (!selectedMeetingId) return;
+    if (!hasDeliverables) return;
+  
+    // Use revision if present; fallback to updated_at to detect changes
+    const rev = String(selectedMeeting?.deliverables_revision ?? "");
+    const updated = String(selectedMeeting?.updated_at ?? "");
+    const token = `${selectedMeetingId}::${rev || updated}`;
+  
+    // Prevent repeatedly autoloading on every render
+    if (lastAutoLoadedRef.current === token) return;
+    lastAutoLoadedRef.current = token;
+  
+    autoLoadAllTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMeetingId, hasDeliverables, selectedMeeting?.deliverables_revision, selectedMeeting?.updated_at]);
 
   async function onChangeMeeting(nextId) {
     const hasDirty = Object.values(taskDrafts).some((d) => d?.dirty);
@@ -510,6 +530,23 @@ export default function DeliverablesTab({ selectedClientId }) {
     if (deliverablesLanguage === "SAS") return "SAS";
     return "R";
   }
+
+  async function autoLoadAllTasks() {
+    if (!selectedClientId || !selectedMeetingId) return;
+    if (!specIndex || specIndex.length === 0) return;
+  
+    const defaultLang = defaultTemplateLangForMeeting();
+  
+    // Load all tasks (parallel)
+    await Promise.all(
+      specIndex.map((s) => {
+        const ti = Number(s.task_index);
+        if (!Number.isFinite(ti) || ti <= 0) return Promise.resolve();
+        return loadTask(ti, defaultLang);
+      })
+    );
+  }
+
 
   return (
     <div style={{ marginTop: 6 }}>
