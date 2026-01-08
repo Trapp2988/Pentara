@@ -10,7 +10,12 @@ function slugPreview(name) {
     .replace(/(^-|-$)/g, "");
 }
 
-export default function ClientSelector({ value, onChange, disabled }) {
+export default function ClientSelector({
+  value,
+  onChange,
+  disabled,
+  allowAdd = true,
+}) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
@@ -20,10 +25,7 @@ export default function ClientSelector({ value, onChange, disabled }) {
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
 
-  const clientIdPreview = useMemo(
-    () => slugPreview(displayName),
-    [displayName]
-  );
+  const clientIdPreview = useMemo(() => slugPreview(displayName), [displayName]);
 
   async function refresh({ selectId } = {}) {
     setLoadErr("");
@@ -32,11 +34,9 @@ export default function ClientSelector({ value, onChange, disabled }) {
       const list = await fetchClients();
 
       list.sort((a, b) =>
-        (a.display_name || "").localeCompare(
-          b.display_name || "",
-          undefined,
-          { sensitivity: "base" }
-        )
+        (a.display_name || "").localeCompare(b.display_name || "", undefined, {
+          sensitivity: "base",
+        })
       );
 
       setClients(list);
@@ -59,6 +59,7 @@ export default function ClientSelector({ value, onChange, disabled }) {
   }, []);
 
   function openAdd() {
+    if (!allowAdd) return;
     setSaveErr("");
     setDisplayName("");
     setShowAdd(true);
@@ -107,21 +108,21 @@ export default function ClientSelector({ value, onChange, disabled }) {
             </option>
           ))}
         </select>
-        
-        <button
-          type="button"
-          onClick={() => refresh()}
-          disabled={disabled || loading}
-        >
+
+        {allowAdd ? (
+          <button type="button" onClick={openAdd} disabled={disabled || loading}>
+            Add Client
+          </button>
+        ) : null}
+
+        <button type="button" onClick={() => refresh()} disabled={disabled || loading}>
           Refresh
         </button>
       </div>
 
-      {loadErr ? (
-        <div style={{ color: "crimson", marginTop: 10 }}>{loadErr}</div>
-      ) : null}
+      {loadErr ? <div style={{ color: "crimson", marginTop: 10 }}>{loadErr}</div> : null}
 
-      {showAdd ? (
+      {allowAdd && showAdd ? (
         <div
           style={{
             marginTop: 14,
@@ -140,19 +141,12 @@ export default function ClientSelector({ value, onChange, disabled }) {
             }}
           >
             <strong>Add Client</strong>
-            <button
-              type="button"
-              onClick={() => setShowAdd(false)}
-              disabled={saving}
-            >
+            <button type="button" onClick={() => setShowAdd(false)} disabled={saving}>
               X
             </button>
           </div>
 
-          <form
-            onSubmit={submitAdd}
-            style={{ display: "grid", gap: 10, marginTop: 10 }}
-          >
+          <form onSubmit={submitAdd} style={{ display: "grid", gap: 10, marginTop: 10 }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label>Display name</label>
               <input
@@ -163,25 +157,14 @@ export default function ClientSelector({ value, onChange, disabled }) {
                 disabled={saving}
               />
               <small style={{ opacity: 0.8 }}>
-                Client ID will be:{" "}
-                <code>{clientIdPreview || "(enter a name)"}</code>
+                Client ID will be: <code>{clientIdPreview || "(enter a name)"}</code>
               </small>
             </div>
 
             {saveErr ? <div style={{ color: "crimson" }}>{saveErr}</div> : null}
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setShowAdd(false)}
-                disabled={saving}
-              >
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setShowAdd(false)} disabled={saving}>
                 Cancel
               </button>
               <button type="submit" disabled={saving}>
