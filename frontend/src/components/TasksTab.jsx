@@ -123,16 +123,15 @@ function deepEqualJson(a, b) {
 function withMeetingNumbers(meetings) {
   const list = Array.isArray(meetings) ? meetings : [];
 
-  function ts(m) {
+   function ts(m) {
+    // Stable ordering: based on creation time only.
     const t1 = new Date(m?.created_at || "").getTime();
     if (!Number.isNaN(t1) && t1 > 0) return t1;
 
-    const t2 = new Date(m?.updated_at || "").getTime();
-    if (!Number.isNaN(t2) && t2 > 0) return t2;
-
+    // Fallback: parse from meeting_id (UTC timestamp in the ID).
     const { date } = parseMeetingId(m?.meeting_id || "");
-    const t3 = date ? date.getTime() : 0;
-    return t3 || 0;
+    const t2 = date ? date.getTime() : 0;
+    return t2 || 0;
   }
 
   const sortedAsc = [...list].sort((a, b) => ts(a) - ts(b));
