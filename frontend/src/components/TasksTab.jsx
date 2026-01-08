@@ -5,7 +5,8 @@ import {
   generateTasks,
   reviseTasks,
   saveTasks,
-  clearTasks, // NEW
+  clearTasks, 
+  fetchTranscript,
 } from "../api/meetingsApi";
 
 function parseMeetingId(meetingId) {
@@ -163,6 +164,12 @@ export default function TasksTab({ selectedClientId }) {
   // Editable draft state
   const [draftTasks, setDraftTasks] = useState([]);
   const [aiInstructions, setAiInstructions] = useState("");
+
+  // Show transcript state
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [transcriptText, setTranscriptText] = useState("");
+  const [loadingTranscript, setLoadingTranscript] = useState(false);
+
 
   // Track the last-loaded server version to detect unsaved edits
   const baselineRef = useRef({ tasks: [] });
@@ -416,68 +423,77 @@ export default function TasksTab({ selectedClientId }) {
   }
 
   return (
-    <div style={{ marginTop: 6 }}>
-      <h2 style={{ margin: "10px 0" }}>Tasks</h2>
+  <div style={{ marginTop: 6 }}>
+    <h2 style={{ margin: "10px 0" }}>Tasks</h2>
 
-      {!selectedClientId ? (
-        <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
-          Select a client to view meetings.
+    {!selectedClientId ? (
+      <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+        Select a client to view meetings.
+      </div>
+    ) : (
+      <>
+        {/* Instructions (top of Tasks tab) */}
+        <div className="instructionsBox">
+          <strong>Instructions</strong>
+          <ol>
+            <li>Select a meeting with a completed transcript.</li>
+            <li>Click Generate tasks.</li>
+            <li>Review/edit tasks.</li>
+            <li>Approve tasks to unlock deliverables (spec sheets + code templates).</li>
+          </ol>
         </div>
-      ) : (
-        <>
-          {/* Instructions (top of Tasks tab) */}
-          <div className="instructionsBox">
-            <strong>Instructions</strong>
-            <ol>
-              <li>Select a meeting with a completed transcript.</li>
-              <li>Click Generate tasks.</li>
-              <li>Review/edit tasks.</li>
-              <li>Approve tasks to unlock deliverables (spec sheets + code templates).</li>
-            </ol>
-          </div>
 
-          {/* Meeting selector row */}
+        {/* Meeting selector row */}
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            flexWrap: "wrap",
+            marginBottom: 12,
+          }}
+        >
+          <label style={{ fontWeight: 700 }}>Meeting</label>
+
+          <select
+            value={selectedMeetingId || ""}
+            onChange={(e) => onChangeMeeting(e.target.value)}
+            disabled={loading || meetings.length === 0}
+            style={{ padding: 10, minWidth: 360, maxWidth: "100%" }}
+          >
+            {meetings.length === 0 ? (
+              <option value="" disabled>
+                {loading ? "Loading meetings..." : "No meetings found"}
+              </option>
+            ) : null}
+
+            {meetings.map((m) => (
+              <option key={m.meeting_id} value={m.meeting_id}>
+                {formatMeetingLabel(m)} — transcript {m.transcript_status}
+              </option>
+            ))}
+          </select>
+
+          <button type="button" onClick={() => refreshMeetings()} disabled={loading}>
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
+
+          {dirty ? <span style={{ fontSize: 13, opacity: 0.85 }}>Unsaved changes</span> : null}
+        </div>
+
+        {err ? <div style={{ color: "crimson", marginBottom: 10 }}>{err}</div> : null}
+
+        {/* Meeting details + actions */}
+        {selectedMeeting ? (
           <div
             style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              flexWrap: "wrap",
-              marginBottom: 12,
+              display: "grid",
+              gridTemplateColumns: showTranscript ? "2fr 1fr" : "1fr",
+              gap: 14,
+              alignItems: "start",
             }}
           >
-            <label style={{ fontWeight: 700 }}>Meeting</label>
-
-            <select
-              value={selectedMeetingId || ""}
-              onChange={(e) => onChangeMeeting(e.target.value)}
-              disabled={loading || meetings.length === 0}
-              style={{ padding: 10, minWidth: 360, maxWidth: "100%" }}
-            >
-              {meetings.length === 0 ? (
-                <option value="" disabled>
-                  {loading ? "Loading meetings..." : "No meetings found"}
-                </option>
-              ) : null}
-
-              {meetings.map((m) => (
-                <option key={m.meeting_id} value={m.meeting_id}>
-                  {formatMeetingLabel(m)} — transcript {m.transcript_status}
-                </option>
-              ))}
-            </select>
-
-            <button type="button" onClick={() => refreshMeetings()} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
-
-            {dirty ? <span style={{ fontSize: 13, opacity: 0.85 }}>Unsaved changes</span> : null}
-          </div>
-
-          {err ? <div style={{ color: "crimson", marginBottom: 10 }}>{err}</div> : null}
-
-          {/* Meeting details + actions */}
-          {selectedMeeting ? (
+            {/* LEFT: main tasks card */}
             <div
               style={{
                 border: "1px solid #ddd",
@@ -506,9 +522,7 @@ export default function TasksTab({ selectedClientId }) {
                         background:
                           tasksStatus === "APPROVED"
                             ? "#e6f4ea"
-                            : tasksStatus === "GENERATED" ||
-                              tasksStatus === "REVISED" ||
-                              tasksStatus === "EDITED"
+                            : tasksStatus === "GENERATED" || tasksStatus === "REVISED" || tasksStatus === "EDITED"
                             ? "#eef3ff"
                             : "#eee",
                       }}
@@ -521,24 +535,7 @@ export default function TasksTab({ selectedClientId }) {
                   </div>
                 </div>
 
-                {selectedMeeting.transcript_preview ? (
-                  <div style={{ marginTop: 6 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Transcript preview</div>
-                    <div
-                      style={{
-                        padding: 10,
-                        border: "1px solid #eee",
-                        borderRadius: 8,
-                        background: "#fafafa",
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {selectedMeeting.transcript_preview}
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* Generate / Approve / Clear */}
+                {/* Generate / Approve / Clear + Transcript */}
                 <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
                   <button
                     type="button"
@@ -574,6 +571,39 @@ export default function TasksTab({ selectedClientId }) {
                     title={!canApprove ? "Generate/revise/edit tasks first." : ""}
                   >
                     {approving ? "Approving..." : "Approve"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!selectedClientId || !selectedMeetingId) return;
+
+                      // toggle off
+                      if (showTranscript) {
+                        setShowTranscript(false);
+                        return;
+                      }
+
+                      setErr("");
+                      setLoadingTranscript(true);
+                      try {
+                        const d = await fetchTranscript(selectedClientId, selectedMeetingId);
+                        setTranscriptText(d?.transcript || "");
+                        setShowTranscript(true);
+                      } catch (e) {
+                        setErr(e?.message || "Failed to load transcript");
+                      } finally {
+                        setLoadingTranscript(false);
+                      }
+                    }}
+                    disabled={!selectedMeetingId || loadingTranscript}
+                    title={transcriptStatus !== "READY" ? "Transcript must be READY." : ""}
+                  >
+                    {showTranscript
+                      ? "Hide transcript"
+                      : loadingTranscript
+                      ? "Loading transcript..."
+                      : "View transcript"}
                   </button>
 
                   {dirty ? (
@@ -722,13 +752,43 @@ export default function TasksTab({ selectedClientId }) {
                 ) : null}
               </div>
             </div>
-          ) : (
-            <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
-              {loading ? "Loading..." : "No meeting selected."}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
+
+            {/* RIGHT: transcript panel */}
+            {showTranscript ? (
+              <div
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: 10,
+                  padding: 12,
+                  background: "#fafafa",
+                  maxHeight: "75vh",
+                  overflowY: "auto",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                  <div style={{ fontWeight: 900 }}>Transcript</div>
+                  <button type="button" onClick={() => setShowTranscript(false)}>
+                    Close
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85 }}>
+                  {(transcriptText || "").trim()
+                    ? transcriptText
+                    : (selectedMeeting?.transcript_preview || "").trim()
+                    ? selectedMeeting.transcript_preview
+                    : "No transcript text found."}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+            {loading ? "Loading..." : "No meeting selected."}
+          </div>
+        )}
+      </>
+    )}
+  </div>
+);
