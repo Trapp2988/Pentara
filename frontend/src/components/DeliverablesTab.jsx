@@ -605,6 +605,7 @@ export default function DeliverablesTab({ selectedClientId }) {
                     onClick={onClearGeneration}
                     disabled={busy || !selectedMeetingId || !hasDeliverables}
                     title={!hasDeliverables ? "Nothing to clear yet." : ""}
+                    style={{ background: "#fff", border: "1px solid #d33", color: "#d33" }}
                   >
                     {clearing ? "Clearing..." : "Clear generation"}
                   </button>
