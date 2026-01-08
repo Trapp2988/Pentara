@@ -107,11 +107,7 @@ export default function ClientSelector({ value, onChange, disabled }) {
             </option>
           ))}
         </select>
-
-        <button type="button" onClick={openAdd} disabled={disabled || loading}>
-          Add Client
-        </button>
-
+        
         <button
           type="button"
           onClick={() => refresh()}
