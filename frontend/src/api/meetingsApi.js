@@ -53,6 +53,17 @@ export async function fetchMeetings(clientId) {
 // =======================
 // Tasks
 // =======================
+export async function fetchTranscript(clientId, meetingId) {
+  const cid = (clientId || "").trim();
+  const mid = (meetingId || "").trim();
+  if (!cid) throw new Error("clientId is required");
+  if (!mid) throw new Error("meetingId is required");
+
+  return request(
+    `/clients/${encodeURIComponent(cid)}/meetings/${encodeURIComponent(mid)}/transcript`,
+    { method: "GET" }
+  );
+}
 
 export async function generateTasks(clientId, meetingId) {
   const cid = (clientId || "").trim();
