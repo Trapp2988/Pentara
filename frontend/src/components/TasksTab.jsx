@@ -423,372 +423,372 @@ export default function TasksTab({ selectedClientId }) {
   }
 
   return (
-  <div style={{ marginTop: 6 }}>
-    <h2 style={{ margin: "10px 0" }}>Tasks</h2>
-
-    {!selectedClientId ? (
-      <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
-        Select a client to view meetings.
-      </div>
-    ) : (
-      <>
-        {/* Instructions (top of Tasks tab) */}
-        <div className="instructionsBox">
-          <strong>Instructions</strong>
-          <ol>
-            <li>Select a meeting with a completed transcript.</li>
-            <li>Click Generate tasks.</li>
-            <li>Review/edit tasks.</li>
-            <li>Approve tasks to unlock deliverables (spec sheets + code templates).</li>
-          </ol>
+    <div style={{ marginTop: 6 }}>
+      <h2 style={{ margin: "10px 0" }}>Tasks</h2>
+  
+      {!selectedClientId ? (
+        <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+          Select a client to view meetings.
         </div>
-
-        {/* Meeting selector row */}
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            flexWrap: "wrap",
-            marginBottom: 12,
-          }}
-        >
-          <label style={{ fontWeight: 700 }}>Meeting</label>
-
-          <select
-            value={selectedMeetingId || ""}
-            onChange={(e) => onChangeMeeting(e.target.value)}
-            disabled={loading || meetings.length === 0}
-            style={{ padding: 10, minWidth: 360, maxWidth: "100%" }}
-          >
-            {meetings.length === 0 ? (
-              <option value="" disabled>
-                {loading ? "Loading meetings..." : "No meetings found"}
-              </option>
-            ) : null}
-
-            {meetings.map((m) => (
-              <option key={m.meeting_id} value={m.meeting_id}>
-                {formatMeetingLabel(m)} — transcript {m.transcript_status}
-              </option>
-            ))}
-          </select>
-
-          <button type="button" onClick={() => refreshMeetings()} disabled={loading}>
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
-
-          {dirty ? <span style={{ fontSize: 13, opacity: 0.85 }}>Unsaved changes</span> : null}
-        </div>
-
-        {err ? <div style={{ color: "crimson", marginBottom: 10 }}>{err}</div> : null}
-
-        {/* Meeting details + actions */}
-        {selectedMeeting ? (
+      ) : (
+        <>
+          {/* Instructions (top of Tasks tab) */}
+          <div className="instructionsBox">
+            <strong>Instructions</strong>
+            <ol>
+              <li>Select a meeting with a completed transcript.</li>
+              <li>Click Generate tasks.</li>
+              <li>Review/edit tasks.</li>
+              <li>Approve tasks to unlock deliverables (spec sheets + code templates).</li>
+            </ol>
+          </div>
+  
+          {/* Meeting selector row */}
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: showTranscript ? "2fr 1fr" : "1fr",
-              gap: 14,
-              alignItems: "start",
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: 12,
             }}
           >
-            {/* LEFT: main tasks card */}
+            <label style={{ fontWeight: 700 }}>Meeting</label>
+  
+            <select
+              value={selectedMeetingId || ""}
+              onChange={(e) => onChangeMeeting(e.target.value)}
+              disabled={loading || meetings.length === 0}
+              style={{ padding: 10, minWidth: 360, maxWidth: "100%" }}
+            >
+              {meetings.length === 0 ? (
+                <option value="" disabled>
+                  {loading ? "Loading meetings..." : "No meetings found"}
+                </option>
+              ) : null}
+  
+              {meetings.map((m) => (
+                <option key={m.meeting_id} value={m.meeting_id}>
+                  {formatMeetingLabel(m)} — transcript {m.transcript_status}
+                </option>
+              ))}
+            </select>
+  
+            <button type="button" onClick={() => refreshMeetings()} disabled={loading}>
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+  
+            {dirty ? <span style={{ fontSize: 13, opacity: 0.85 }}>Unsaved changes</span> : null}
+          </div>
+  
+          {err ? <div style={{ color: "crimson", marginBottom: 10 }}>{err}</div> : null}
+  
+          {/* Meeting details + actions */}
+          {selectedMeeting ? (
             <div
               style={{
-                border: "1px solid #ddd",
-                borderRadius: 10,
-                padding: 14,
-                background: "#fff",
+                display: "grid",
+                gridTemplateColumns: showTranscript ? "2fr 1fr" : "1fr",
+                gap: 14,
+                alignItems: "start",
               }}
             >
-              <div style={{ display: "grid", gap: 10 }}>
-                <div>
-                  <strong>Meeting:</strong> {formatMeetingIdShort(selectedMeeting)}
-                </div>
-
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <div>
-                    <strong>Transcript:</strong> {statusPill(selectedMeeting.transcript_status)}
-                  </div>
-                  <div>
-                    <strong>Tasks:</strong>{" "}
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: 999,
-                        fontSize: 12,
-                        border: "1px solid #ddd",
-                        background:
-                          tasksStatus === "APPROVED"
-                            ? "#e6f4ea"
-                            : tasksStatus === "GENERATED" || tasksStatus === "REVISED" || tasksStatus === "EDITED"
-                            ? "#eef3ff"
-                            : "#eee",
-                      }}
-                    >
-                      {tasksStatus}
-                    </span>
-                  </div>
-                  <div style={{ opacity: 0.85 }}>
-                    <strong>Updated:</strong> {fmtDate(selectedMeeting.updated_at)}
-                  </div>
-                </div>
-
-                {/* Generate / Approve / Clear + Transcript */}
-                <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={onGenerate}
-                    disabled={!canGenerate || generating || clearing}
-                    title={
-                      transcriptStatus !== "READY"
-                        ? "Transcript must be READY before generating tasks."
-                        : hasServerOutputs
-                        ? "Tasks already exist. Clear tasks first."
-                        : ""
-                    }
-                  >
-                    {generating ? "Generating..." : "Generate tasks"}
-                  </button>
-
-                  {hasServerOutputs ? (
-                    <button
-                      type="button"
-                      onClick={onClearTasks}
-                      disabled={clearing || generating || saving || revising}
-                      title="Clears stored tasks so you can generate again cleanly."
-                      style={{ background: "#fff", border: "1px solid #d33", color: "#d33" }}
-                    >
-                      {clearing ? "Clearing..." : "Clear tasks"}
-                    </button>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    onClick={onApprove}
-                    disabled={!canApprove || approving || clearing}
-                    title={!canApprove ? "Generate/revise/edit tasks first." : ""}
-                  >
-                    {approving ? "Approving..." : "Approve"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!selectedClientId || !selectedMeetingId) return;
-
-                      // toggle off
-                      if (showTranscript) {
-                        setShowTranscript(false);
-                        return;
-                      }
-
-                      setErr("");
-                      setLoadingTranscript(true);
-                      try {
-                        const d = await fetchTranscript(selectedClientId, selectedMeetingId);
-                        setTranscriptText(d?.transcript || "");
-                        setShowTranscript(true);
-                      } catch (e) {
-                        setErr(e?.message || "Failed to load transcript");
-                      } finally {
-                        setLoadingTranscript(false);
-                      }
-                    }}
-                    disabled={!selectedMeetingId || loadingTranscript}
-                    title={transcriptStatus !== "READY" ? "Transcript must be READY." : ""}
-                  >
-                    {showTranscript
-                      ? "Hide transcript"
-                      : loadingTranscript
-                      ? "Loading transcript..."
-                      : "View transcript"}
-                  </button>
-
-                  {dirty ? (
-                    <button type="button" onClick={resetDraftToServer} disabled={saving || revising || clearing}>
-                      Reset draft
-                    </button>
-                  ) : null}
-                </div>
-
-                {/* If no outputs yet */}
-                {!hasServerOutputs ? (
-                  <div style={{ marginTop: 10, opacity: 0.85 }}>
-                    No tasks stored yet. If transcript is READY, click “Generate”.
-                  </div>
-                ) : (
-                  <>
-                    {/* AI revision instructions */}
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ fontWeight: 800, marginBottom: 6 }}>AI revision prompt</div>
-                      <textarea
-                        value={aiInstructions}
-                        onChange={(e) => setAiInstructions(e.target.value)}
-                        placeholder="Example: Make the tasks more specific and add assumptions where needed."
-                        rows={4}
-                        style={{
-                          width: "100%",
-                          padding: 10,
-                          border: "1px solid #ddd",
-                          borderRadius: 8,
-                          resize: "vertical",
-                        }}
-                        disabled={revising || clearing}
-                      />
-
-                      <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={onReviseWithAI}
-                          disabled={revising || clearing || !aiInstructions.trim()}
-                        >
-                          {revising ? "Revising..." : "Revise with AI"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={onSaveEdits}
-                          disabled={saving || clearing || !dirty}
-                          title={!dirty ? "No unsaved edits." : ""}
-                        >
-                          {saving ? "Saving..." : "Save edits"}
-                        </button>
-                      </div>
-
-                      <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85 }}>
-                        Tip: Iterate—Revise with AI, then manual edit, then Save, then revise again.
-                      </div>
-                    </div>
-
-                    {/* Editable Tasks */}
-                    <div style={{ marginTop: 16 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <h3 style={{ margin: 0 }}>Tasks (editable)</h3>
-                        <button type="button" onClick={addTask} disabled={saving || revising || clearing}>
-                          + Add task
-                        </button>
-                      </div>
-
-                      {draftTasks.length === 0 ? (
-                        <div style={{ marginTop: 8, opacity: 0.85 }}>
-                          No tasks in draft. Add one, or revise with AI.
-                        </div>
-                      ) : (
-                        <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
-                          {draftTasks.map((t, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                border: "1px solid #eee",
-                                borderRadius: 10,
-                                padding: 12,
-                                background: "#fafafa",
-                              }}
-                            >
-                              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                                <div style={{ fontWeight: 800 }}>Task {idx + 1}</div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeTask(idx)}
-                                  className="btnSecondary"
-                                  disabled={saving || revising || clearing}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-
-                              <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                                <div style={{ display: "grid", gap: 6 }}>
-                                  <label style={{ fontWeight: 700 }}>Title</label>
-                                  <input
-                                    value={t.title}
-                                    onChange={(e) => updateTask(idx, { title: e.target.value })}
-                                    placeholder="Task title"
-                                    disabled={saving || revising || clearing}
-                                  />
-                                </div>
-
-                                <div style={{ display: "grid", gap: 6 }}>
-                                  <label style={{ fontWeight: 700 }}>Description</label>
-                                  <textarea
-                                    value={t.description}
-                                    onChange={(e) => updateTask(idx, { description: e.target.value })}
-                                    placeholder="Task description"
-                                    rows={3}
-                                    style={{
-                                      width: "100%",
-                                      padding: 10,
-                                      border: "1px solid #ddd",
-                                      borderRadius: 8,
-                                      resize: "vertical",
-                                    }}
-                                    disabled={saving || revising || clearing}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {transcriptStatus !== "READY" ? (
-                  <div style={{ marginTop: 14, fontSize: 13, opacity: 0.85 }}>
-                    <strong>Note:</strong> You can only generate tasks when{" "}
-                    <code>transcript_status</code> is <code>READY</code>. Current:{" "}
-                    <code>{transcriptStatus || "UNKNOWN"}</code>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            {/* RIGHT: transcript panel */}
-            {showTranscript ? (
+              {/* LEFT: main tasks card */}
               <div
                 style={{
                   border: "1px solid #ddd",
                   borderRadius: 10,
-                  padding: 12,
-                  background: "#fafafa",
-                  maxHeight: "75vh",
-                  overflowY: "auto",
-                  whiteSpace: "pre-wrap",
+                  padding: 14,
+                  background: "#fff",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                  <div style={{ fontWeight: 900 }}>Transcript</div>
-                  <button type="button" onClick={() => setShowTranscript(false)}>
-                    Close
-                  </button>
-                </div>
-
-                <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85 }}>
-                  {(transcriptText || "").trim()
-                    ? transcriptText
-                    : (selectedMeeting?.transcript_preview || "").trim()
-                    ? selectedMeeting.transcript_preview
-                    : "No transcript text found."}
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div>
+                    <strong>Meeting:</strong> {formatMeetingIdShort(selectedMeeting)}
+                  </div>
+  
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <div>
+                      <strong>Transcript:</strong> {statusPill(selectedMeeting.transcript_status)}
+                    </div>
+                    <div>
+                      <strong>Tasks:</strong>{" "}
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          fontSize: 12,
+                          border: "1px solid #ddd",
+                          background:
+                            tasksStatus === "APPROVED"
+                              ? "#e6f4ea"
+                              : tasksStatus === "GENERATED" || tasksStatus === "REVISED" || tasksStatus === "EDITED"
+                              ? "#eef3ff"
+                              : "#eee",
+                        }}
+                      >
+                        {tasksStatus}
+                      </span>
+                    </div>
+                    <div style={{ opacity: 0.85 }}>
+                      <strong>Updated:</strong> {fmtDate(selectedMeeting.updated_at)}
+                    </div>
+                  </div>
+  
+                  {/* Generate / Approve / Clear + Transcript */}
+                  <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={onGenerate}
+                      disabled={!canGenerate || generating || clearing}
+                      title={
+                        transcriptStatus !== "READY"
+                          ? "Transcript must be READY before generating tasks."
+                          : hasServerOutputs
+                          ? "Tasks already exist. Clear tasks first."
+                          : ""
+                      }
+                    >
+                      {generating ? "Generating..." : "Generate tasks"}
+                    </button>
+  
+                    {hasServerOutputs ? (
+                      <button
+                        type="button"
+                        onClick={onClearTasks}
+                        disabled={clearing || generating || saving || revising}
+                        title="Clears stored tasks so you can generate again cleanly."
+                        style={{ background: "#fff", border: "1px solid #d33", color: "#d33" }}
+                      >
+                        {clearing ? "Clearing..." : "Clear tasks"}
+                      </button>
+                    ) : null}
+  
+                    <button
+                      type="button"
+                      onClick={onApprove}
+                      disabled={!canApprove || approving || clearing}
+                      title={!canApprove ? "Generate/revise/edit tasks first." : ""}
+                    >
+                      {approving ? "Approving..." : "Approve"}
+                    </button>
+  
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!selectedClientId || !selectedMeetingId) return;
+  
+                        // toggle off
+                        if (showTranscript) {
+                          setShowTranscript(false);
+                          return;
+                        }
+  
+                        setErr("");
+                        setLoadingTranscript(true);
+                        try {
+                          const d = await fetchTranscript(selectedClientId, selectedMeetingId);
+                          setTranscriptText(d?.transcript || "");
+                          setShowTranscript(true);
+                        } catch (e) {
+                          setErr(e?.message || "Failed to load transcript");
+                        } finally {
+                          setLoadingTranscript(false);
+                        }
+                      }}
+                      disabled={!selectedMeetingId || loadingTranscript}
+                      title={transcriptStatus !== "READY" ? "Transcript must be READY." : ""}
+                    >
+                      {showTranscript
+                        ? "Hide transcript"
+                        : loadingTranscript
+                        ? "Loading transcript..."
+                        : "View transcript"}
+                    </button>
+  
+                    {dirty ? (
+                      <button type="button" onClick={resetDraftToServer} disabled={saving || revising || clearing}>
+                        Reset draft
+                      </button>
+                    ) : null}
+                  </div>
+  
+                  {/* If no outputs yet */}
+                  {!hasServerOutputs ? (
+                    <div style={{ marginTop: 10, opacity: 0.85 }}>
+                      No tasks stored yet. If transcript is READY, click “Generate”.
+                    </div>
+                  ) : (
+                    <>
+                      {/* AI revision instructions */}
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ fontWeight: 800, marginBottom: 6 }}>AI revision prompt</div>
+                        <textarea
+                          value={aiInstructions}
+                          onChange={(e) => setAiInstructions(e.target.value)}
+                          placeholder="Example: Make the tasks more specific and add assumptions where needed."
+                          rows={4}
+                          style={{
+                            width: "100%",
+                            padding: 10,
+                            border: "1px solid #ddd",
+                            borderRadius: 8,
+                            resize: "vertical",
+                          }}
+                          disabled={revising || clearing}
+                        />
+  
+                        <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={onReviseWithAI}
+                            disabled={revising || clearing || !aiInstructions.trim()}
+                          >
+                            {revising ? "Revising..." : "Revise with AI"}
+                          </button>
+  
+                          <button
+                            type="button"
+                            onClick={onSaveEdits}
+                            disabled={saving || clearing || !dirty}
+                            title={!dirty ? "No unsaved edits." : ""}
+                          >
+                            {saving ? "Saving..." : "Save edits"}
+                          </button>
+                        </div>
+  
+                        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85 }}>
+                          Tip: Iterate—Revise with AI, then manual edit, then Save, then revise again.
+                        </div>
+                      </div>
+  
+                      {/* Editable Tasks */}
+                      <div style={{ marginTop: 16 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <h3 style={{ margin: 0 }}>Tasks (editable)</h3>
+                          <button type="button" onClick={addTask} disabled={saving || revising || clearing}>
+                            + Add task
+                          </button>
+                        </div>
+  
+                        {draftTasks.length === 0 ? (
+                          <div style={{ marginTop: 8, opacity: 0.85 }}>
+                            No tasks in draft. Add one, or revise with AI.
+                          </div>
+                        ) : (
+                          <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
+                            {draftTasks.map((t, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  border: "1px solid #eee",
+                                  borderRadius: 10,
+                                  padding: 12,
+                                  background: "#fafafa",
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                                  <div style={{ fontWeight: 800 }}>Task {idx + 1}</div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTask(idx)}
+                                    className="btnSecondary"
+                                    disabled={saving || revising || clearing}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+  
+                                <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                                  <div style={{ display: "grid", gap: 6 }}>
+                                    <label style={{ fontWeight: 700 }}>Title</label>
+                                    <input
+                                      value={t.title}
+                                      onChange={(e) => updateTask(idx, { title: e.target.value })}
+                                      placeholder="Task title"
+                                      disabled={saving || revising || clearing}
+                                    />
+                                  </div>
+  
+                                  <div style={{ display: "grid", gap: 6 }}>
+                                    <label style={{ fontWeight: 700 }}>Description</label>
+                                    <textarea
+                                      value={t.description}
+                                      onChange={(e) => updateTask(idx, { description: e.target.value })}
+                                      placeholder="Task description"
+                                      rows={3}
+                                      style={{
+                                        width: "100%",
+                                        padding: 10,
+                                        border: "1px solid #ddd",
+                                        borderRadius: 8,
+                                        resize: "vertical",
+                                      }}
+                                      disabled={saving || revising || clearing}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+  
+                  {transcriptStatus !== "READY" ? (
+                    <div style={{ marginTop: 14, fontSize: 13, opacity: 0.85 }}>
+                      <strong>Note:</strong> You can only generate tasks when{" "}
+                      <code>transcript_status</code> is <code>READY</code>. Current:{" "}
+                      <code>{transcriptStatus || "UNKNOWN"}</code>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            ) : null}
-          </div>
-        ) : (
-          <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
-            {loading ? "Loading..." : "No meeting selected."}
-          </div>
-        )}
-      </>
-    )}
-  </div>
-);
+  
+              {/* RIGHT: transcript panel */}
+              {showTranscript ? (
+                <div
+                  style={{
+                    border: "1px solid #ddd",
+                    borderRadius: 10,
+                    padding: 12,
+                    background: "#fafafa",
+                    maxHeight: "75vh",
+                    overflowY: "auto",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                    <div style={{ fontWeight: 900 }}>Transcript</div>
+                    <button type="button" onClick={() => setShowTranscript(false)}>
+                      Close
+                    </button>
+                  </div>
+  
+                  <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85 }}>
+                    {(transcriptText || "").trim()
+                      ? transcriptText
+                      : (selectedMeeting?.transcript_preview || "").trim()
+                      ? selectedMeeting.transcript_preview
+                      : "No transcript text found."}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+              {loading ? "Loading..." : "No meeting selected."}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
